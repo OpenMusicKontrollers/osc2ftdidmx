@@ -10,6 +10,9 @@ version = run_command('cat', 'VERSION').stdout().strip()
 add_project_arguments('-DOSC2FTDIDMX_VERSION="'+version+'"', language : 'c')
 add_project_arguments('-D_GNU_SOURCE', language : 'c')
 
+osc_inc = include_directories('osc.lv2')
+incs = [osc_inc]
+
 cc = meson.get_compiler('c')
 
 lv2_dep = dependency('lv2', version : '>=1.14.0')
@@ -25,6 +28,7 @@ srcs = ['osc2ftdidmx.c']
 
 executable('osc2ftdidmx',
 	srcs,
+	include_directories : incs,
 	dependencies : deps,
 	install : true)
 

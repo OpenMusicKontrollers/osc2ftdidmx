@@ -2,9 +2,10 @@
 #	include <libftdi1/ftdi.h>
 #else
 #	include <ftdi.h>
-#endif  // HAVE_LIBFTDI1
+#endif // HAVE_LIBFTDI1
 
 #include <osc2ftdidmx.h>
+#include <osc.lv2/stream.h>
 	
 int
 main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
