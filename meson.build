@@ -11,14 +11,16 @@ add_project_arguments('-DOSC2FTDIDMX_VERSION="'+version+'"', language : 'c')
 add_project_arguments('-D_GNU_SOURCE', language : 'c')
 
 osc_inc = include_directories('osc.lv2')
-incs = [osc_inc]
+varchunk_inc = include_directories('varchunk')
+incs = [osc_inc, varchunk_inc]
 
 cc = meson.get_compiler('c')
 
 lv2_dep = dependency('lv2', version : '>=1.14.0')
-ftdi_dep = dependency('libftdi', version : '>=0.20', required : false)
+ftdi_dep = dependency('libftdi1', version : '>=1.4', required : false)
 if not ftdi_dep.found()
-	ftdi_dep = dependency('libftdi1', version : '>=1.4')
+	ftdi_dep = dependency('libftdi', version : '>=0.20')
+else
 	add_project_arguments('-DHAVE_LIBFTDI1', language : 'c')
 endif
 
