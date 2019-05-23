@@ -30,7 +30,7 @@ struct _app_t {
 
 	LV2_OSC_Stream stream;
 
-  struct ftdi_context ftdi;
+	struct ftdi_context ftdi;
 
 	struct {
 		varchunk_t *rx;
@@ -125,10 +125,12 @@ success:
 
 	app->dmx.data[channel] = value;
 
-  ftdi_set_line_property2(&app->ftdi, BITS_8, STOP_BIT_2, NONE, BREAK_ON);
-  ftdi_set_line_property2(&app->ftdi, BITS_8, STOP_BIT_2, NONE, BREAK_OFF);
-  ftdi_write_data(&app->ftdi, app->dmx.start_code,
-		sizeof(app->dmx.start_code) + sizeof(app->dmx.data));
+	const size_t sz = sizeof(app->dmx.start_code) + sizeof(app->dmx.data);
+	assert(ftdi_set_line_property2(&app->ftdi, BITS_8, STOP_BIT_2, NONE,
+		BREAK_ON) == 0);
+	assert(ftdi_set_line_property2(&app->ftdi, BITS_8, STOP_BIT_2, NONE,
+		BREAK_OFF) == 0);
+	assert(ftdi_write_data(&app->ftdi, app->dmx.start_code, sz) == sz);
 }
 
 static void
@@ -200,7 +202,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	static app_t app;
 
 	app.vid = FTDI_VID;
-	app.pid = FT4232_PID;
+	app.pid = FT232_PID;
 	app.sid = NULL;
 	app.url = "osc.udp://:6666";
 
@@ -274,23 +276,25 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	app.rb.tx = varchunk_new(8192, false);
 	assert(app.rb.tx);
 
-	ftdi_init(&app.ftdi);
-  ftdi_set_interface(&app.ftdi, INTERFACE_ANY);
+	assert(ftdi_init(&app.ftdi) == 0);
+	assert(ftdi_set_interface(&app.ftdi, INTERFACE_ANY) == 0);
 	if(strlen(app.sid) == 0)
 	{
-		ftdi_usb_open(&app.ftdi, app.vid, app.pid);
+		assert(ftdi_usb_open(&app.ftdi, app.vid, app.pid) == 0);
 	}
 	else
 	{
-  	ftdi_usb_open_desc(&app.ftdi, app.vid, app.pid, "KMtronic", app.sid); //FIXME
+		assert(ftdi_usb_open_desc(&app.ftdi, app.vid, app.pid,
+			"KMtronic DMX Interface", app.sid) == 0);
 	}
 
-  ftdi_usb_reset(&app.ftdi);
-  ftdi_set_baudrate(&app.ftdi, 25000);
-  ftdi_set_line_property(&app.ftdi, BITS_8, STOP_BIT_2, NONE);
-  ftdi_setflowctrl(&app.ftdi, SIO_DISABLE_FLOW_CTRL);
-  ftdi_usb_purge_buffers(&app.ftdi);
-  ftdi_setrts(&app.ftdi, 0);
+	assert(ftdi_usb_reset(&app.ftdi) == 0);
+	assert(ftdi_set_baudrate(&app.ftdi, 250000) == 0);
+	assert(ftdi_set_line_property2(&app.ftdi, BITS_8, STOP_BIT_2, NONE,
+		BREAK_ON) == 0);
+	assert(ftdi_usb_purge_buffers(&app.ftdi) == 0);
+	assert(ftdi_setflowctrl(&app.ftdi, SIO_DISABLE_FLOW_CTRL) == 0);
+	assert(ftdi_setrts(&app.ftdi, 0) == 0);
 
 	lv2_osc_stream_init(&app.stream, "osc.udp://:6666", &driver, &app);
 
@@ -334,7 +338,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 
 	lv2_osc_stream_deinit(&app.stream);
 
-  ftdi_usb_close(&app.ftdi);
+	assert(ftdi_usb_close(&app.ftdi) == 0);
 	ftdi_deinit(&app.ftdi);
 
 	varchunk_free(app.rb.rx);
