@@ -121,8 +121,6 @@ _handle_osc_message(app_t *app, LV2_OSC_Reader *reader, size_t len)
 	}
 
 success:
-	fprintf(stdout, "[%s:%i] %i %i\n", __func__, __LINE__, channel, value);
-
 	app->dmx.data[channel] = value;
 
 	const size_t sz = sizeof(app->dmx.start_code) + sizeof(app->dmx.data);
@@ -310,8 +308,6 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 
 		if(status & LV2_OSC_RECV)
 		{
-			fprintf(stdout, "[%s:%i] received\n", __func__, __LINE__);
-
 			const uint8_t *buf;
 			size_t len;
 			while( (buf = varchunk_read_request(app.rb.rx, &len)) )
