@@ -14,6 +14,19 @@ send()
 	oscsend osc.udp://localhost:6666 /dmx ii $1 $2
 }
 
+send_rgb()
+{
+	local channel=$1
+	local rgba=$2
+
+	local r=$(( (rgba >> 24) & 0xff ))
+	local g=$(( (rgba >> 16) & 0xff ))
+	local b=$(( (rgba >>  8) & 0xff ))
+	local a=$(( (rgba >>  9) & 0xff ))
+
+	oscsend osc.udp://localhost:6666 /dmx ii $channel $r $g $b $a
+}
+
 ramp_up()
 {
 	for i in $(seq 0 $inc 255); do

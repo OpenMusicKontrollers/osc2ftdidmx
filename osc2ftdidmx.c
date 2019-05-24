@@ -2,14 +2,15 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <inttypes.h>
+#include <semaphore.h>
+#include <time.h>
+#include <signal.h>
 
 #ifdef HAVE_LIBFTDI1
 #	include <libftdi1/ftdi.h>
 #else
 #	include <ftdi.h>
 #endif // HAVE_LIBFTDI1
-
-#include <osc2ftdidmx.h>
 
 #include <osc.lv2/stream.h>
 #include <osc.lv2/reader.h>
@@ -19,6 +20,7 @@
 #define FTDI_VID   0x0403
 #define FT232_PID  0x6001
 #define FT4232_PID 0x6011
+#define SEC        1000000000
 
 typedef struct _app_t app_t;
 
@@ -26,6 +28,8 @@ struct _app_t {
 	uint16_t vid;
 	uint16_t pid;
 	const char *sid;
+	const char *nid;
+	uint32_t fps;
 	const char *url;
 
 	LV2_OSC_Stream stream;
@@ -42,6 +46,16 @@ struct _app_t {
 		uint8_t data [512];
 	} __attribute__((packed)) dmx;
 };
+
+static sem_t sem;
+static sig_atomic_t done = 0;
+
+static void
+_sig(int num __attribute__((unused)))
+{
+	done = 1;
+	sem_post(&sem);
+}
 
 static void *
 _write_req(void *data, size_t minimum, size_t *maximum)
@@ -91,7 +105,6 @@ _handle_osc_message(app_t *app, LV2_OSC_Reader *reader, size_t len)
 	const char *path = "/dmx";
 	unsigned pos = 0;
 	unsigned channel = 0;
-	uint8_t value = 0;
 
 	OSC_READER_MESSAGE_FOREACH(reader, arg, len)
 	{
@@ -111,24 +124,18 @@ _handle_osc_message(app_t *app, LV2_OSC_Reader *reader, size_t len)
 					{
 						channel = arg->i & 0x1ff;
 					} break;
-					case 1:
+					default:
 					{
-						value = arg->i & 0xff;
-					} goto success;
+						app->dmx.data[channel++] = arg->i & 0xff;
+					} break;
 				}
+			} break;
+			default:
+			{
+				// ignore other types
 			} break;
 		}
 	}
-
-success:
-	app->dmx.data[channel] = value;
-
-	const size_t sz = sizeof(app->dmx.start_code) + sizeof(app->dmx.data);
-	assert(ftdi_set_line_property2(&app->ftdi, BITS_8, STOP_BIT_2, NONE,
-		BREAK_ON) == 0);
-	assert(ftdi_set_line_property2(&app->ftdi, BITS_8, STOP_BIT_2, NONE,
-		BREAK_OFF) == 0);
-	assert(ftdi_write_data(&app->ftdi, app->dmx.start_code, sz) == sz);
 }
 
 static void
@@ -154,6 +161,116 @@ _handle_osc_packet(app_t *app, const uint8_t *buf, size_t len)
 	{
 		_handle_osc_message(app, &reader, len);
 	}
+}
+
+static int
+_ftdi_xmit(app_t *app)
+{
+	if(ftdi_set_line_property2(&app->ftdi, BITS_8, STOP_BIT_2, NONE,
+		BREAK_ON) != 0)
+	{
+		goto failure;
+	}
+
+	if(ftdi_set_line_property2(&app->ftdi, BITS_8, STOP_BIT_2, NONE,
+		BREAK_OFF) != 0)
+	{
+		goto failure;
+	}
+
+	const ssize_t sz = sizeof(app->dmx.start_code) + sizeof(app->dmx.data);
+	if(ftdi_write_data(&app->ftdi, app->dmx.start_code, sz) != sz)
+	{
+		goto failure;
+	}
+
+	return 0;
+
+failure:
+	fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
+
+	return -1;
+}
+
+static int
+_ftdi_init(app_t *app)
+{
+	app->ftdi.module_detach_mode = AUTO_DETACH_SIO_MODULE;
+
+	if(ftdi_init(&app->ftdi) != 0)
+	{
+		goto failure;
+	}
+
+	if(ftdi_set_interface(&app->ftdi, INTERFACE_ANY) != 0)
+	{
+		goto failure;
+	}
+
+	if(app->nid && app->sid)
+	{
+		if(ftdi_usb_open_desc(&app->ftdi, app->vid, app->pid,
+			app->nid, app->sid) != 0)
+		{
+			goto failure;
+		}
+	}
+	else
+	{
+		if(ftdi_usb_open(&app->ftdi, app->vid, app->pid) != 0)
+		{
+			goto failure;
+		}
+	}
+
+	if(ftdi_usb_reset(&app->ftdi) != 0)
+	{
+		goto failure;
+	}
+
+	if(ftdi_set_baudrate(&app->ftdi, 250000) != 0)
+	{
+		goto failure;
+	}
+
+	if(ftdi_set_line_property2(&app->ftdi, BITS_8, STOP_BIT_2, NONE,
+		BREAK_ON) != 0)
+	{
+		goto failure;
+	}
+
+	if(ftdi_usb_purge_buffers(&app->ftdi) != 0)
+	{
+		goto failure;
+	}
+
+	if(ftdi_setflowctrl(&app->ftdi, SIO_DISABLE_FLOW_CTRL) != 0)
+	{
+		goto failure;
+	}
+
+	if(ftdi_setrts(&app->ftdi, 0) != 0)
+	{
+		goto failure;
+	}
+
+	return 0;
+
+failure:
+	fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
+
+	return -1;
+}
+
+static void
+_ftdi_deinit(app_t *app)
+{
+	if(ftdi_usb_close(&app->ftdi) != 0)
+	{
+		//FIXME
+	}
+
+	ftdi_deinit(&app->ftdi);
 }
 
 static void
@@ -189,9 +306,11 @@ _usage(char **argv, app_t *app)
 		"   [-d]                     enable verbose logging\n"
 		"   [-V] VID                 USB vendor ID (0x%04"PRIx16")\n"
 		"   [-P] PID                 USB product ID (0x%04"PRIx16")\n"
-		"   [-S] SERIAL              USB serial ID (%s)\n"
+		"   [-N] NAME                USB product name (%s)\n"
+		"   [-S] SID                 USB serial ID (%s)\n"
+		"   [-F] FPS                 Frame rate (%"PRIu32")\n"
 		"   [-U] URI                 OSC URI (%s)\n\n"
-		, argv[0], app->vid, app->pid, app->sid, app->url);
+		, argv[0], app->vid, app->pid, app->nid, app->sid, app->fps, app->url);
 }
 
 int
@@ -201,7 +320,9 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 
 	app.vid = FTDI_VID;
 	app.pid = FT232_PID;
+	app.nid = "KMtronic DMX Interface";
 	app.sid = NULL;
+	app.fps = 25;
 	app.url = "osc.udp://:6666";
 
 	fprintf(stderr,
@@ -211,7 +332,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 		argv[0]);
 
 	int c;
-	while( (c = getopt(argc, argv, "vhdV:P:S:U:") ) != -1)
+	while( (c = getopt(argc, argv, "vhdV:P:N:S:F:U:") ) != -1)
 	{
 		switch(c)
 		{
@@ -236,9 +357,17 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 			{
 				app.pid = strtol(optarg, NULL, 16);
 			} break;
+			case 'N':
+			{
+				app.nid = optarg;
+			} break;
 			case 'S':
 			{
 				app.sid = optarg;
+			} break;
+			case 'F':
+			{
+				app.fps = strtol(optarg, NULL, 10);;
 			} break;
 			case 'U':
 			{
@@ -247,8 +376,8 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 
 			case '?':
 			{
-				if(  (optopt == 'V') || (optopt == 'P') || (optopt == 'S')
-					|| (optopt == 'U') )
+				if(  (optopt == 'V') || (optopt == 'P') || (optopt == 'N')
+					|| (optopt == 'S') || (optopt == 'F') || (optopt == 'U') )
 				{
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);
 				}
@@ -268,36 +397,58 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 		}
 	}
 
+	signal(SIGINT, _sig);
+	signal(SIGTERM, _sig);
+	signal(SIGQUIT, _sig);
+	signal(SIGKILL, _sig);
+
+	if(sem_init(&sem, 0, 0) == -1)
+	{
+		goto failure;
+	}
+
 	app.rb.rx = varchunk_new(8192, false);
-	assert(app.rb.rx);
+	if(!app.rb.rx)
+	{
+		sem_destroy(&sem);
+		goto failure;
+	}
 
 	app.rb.tx = varchunk_new(8192, false);
-	assert(app.rb.tx);
-
-	assert(ftdi_init(&app.ftdi) == 0);
-	assert(ftdi_set_interface(&app.ftdi, INTERFACE_ANY) == 0);
-	if(strlen(app.sid) == 0)
+	if(!app.rb.tx)
 	{
-		assert(ftdi_usb_open(&app.ftdi, app.vid, app.pid) == 0);
-	}
-	else
-	{
-		assert(ftdi_usb_open_desc(&app.ftdi, app.vid, app.pid,
-			"KMtronic DMX Interface", app.sid) == 0);
+		varchunk_free(app.rb.rx);
+		sem_destroy(&sem);
+		goto failure;
 	}
 
-	assert(ftdi_usb_reset(&app.ftdi) == 0);
-	assert(ftdi_set_baudrate(&app.ftdi, 250000) == 0);
-	assert(ftdi_set_line_property2(&app.ftdi, BITS_8, STOP_BIT_2, NONE,
-		BREAK_ON) == 0);
-	assert(ftdi_usb_purge_buffers(&app.ftdi) == 0);
-	assert(ftdi_setflowctrl(&app.ftdi, SIO_DISABLE_FLOW_CTRL) == 0);
-	assert(ftdi_setrts(&app.ftdi, 0) == 0);
+	if(_ftdi_init(&app) == -1)
+	{
+		varchunk_free(app.rb.tx);
+		varchunk_free(app.rb.rx);
+		sem_destroy(&sem);
+		goto failure;
+	}
 
 	lv2_osc_stream_init(&app.stream, "osc.udp://:6666", &driver, &app);
 
-	while(true)
+	struct timespec t0;
+	clock_gettime(CLOCK_REALTIME, &t0);
+	struct timespec t1 = t0;
+
+	const uint64_t step_poll = SEC / 1000;
+	const uint64_t step_fps = SEC / app.fps;
+
+	while(!done)
 	{
+		if(sem_timedwait(&sem, &t1) == -1)
+		{
+			if(errno != ETIMEDOUT)
+			{
+				continue;
+			}
+		}
+
 		const LV2_OSC_Enum status = lv2_osc_stream_run(&app.stream);
 
 		if(status & LV2_OSC_SEND)
@@ -329,16 +480,38 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 			fprintf(stderr, "[%s:%i] %s\n", __func__, __LINE__, strerror(errno));
 		}
 
-		usleep(10000);
+		t1.tv_nsec += step_poll;
+		while(t1.tv_nsec >= SEC)
+		{
+			t1.tv_sec += 1;
+			t1.tv_nsec -= SEC;
+		}
+
+		const uint64_t diff = (t1.tv_sec - t0.tv_sec)*SEC + t1.tv_nsec - t0.tv_nsec;
+		if(diff < step_fps)
+		{
+			continue;
+		}
+
+		if(_ftdi_xmit(&app) == -1)
+		{
+			//FIXME
+		}
+
+		t0 = t1;
 	}
+
+	sem_destroy(&sem);
 
 	lv2_osc_stream_deinit(&app.stream);
 
-	assert(ftdi_usb_close(&app.ftdi) == 0);
-	ftdi_deinit(&app.ftdi);
+	_ftdi_deinit(&app);
 
 	varchunk_free(app.rb.rx);
 	varchunk_free(app.rb.tx);
 
 	return 0;
+
+failure:
+	return -1;
 }

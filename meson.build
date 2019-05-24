@@ -16,6 +16,7 @@ incs = [osc_inc, varchunk_inc]
 
 cc = meson.get_compiler('c')
 
+thread_dep = dependency('threads')
 lv2_dep = dependency('lv2', version : '>=1.14.0')
 ftdi_dep = dependency('libftdi1', version : '>=1.4', required : false)
 if not ftdi_dep.found()
@@ -24,7 +25,7 @@ else
 	add_project_arguments('-DHAVE_LIBFTDI1', language : 'c')
 endif
 
-deps = [lv2_dep, ftdi_dep]
+deps = [thread_dep, lv2_dep, ftdi_dep]
 
 srcs = ['osc2ftdidmx.c']
 
