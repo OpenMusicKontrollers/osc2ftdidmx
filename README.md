@@ -15,6 +15,7 @@
 
 	git clone https://git.open-music-kontrollers.ch/lad/osc2ftdidmx
 	cd osc2ftdidmx
+	meson build
 	cd build
 	ninja
 	sudo ninja install
