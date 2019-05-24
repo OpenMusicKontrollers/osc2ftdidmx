@@ -18,7 +18,7 @@ cc = meson.get_compiler('c')
 
 thread_dep = dependency('threads')
 lv2_dep = dependency('lv2', version : '>=1.14.0')
-ftdi_dep = dependency('libftdi1', version : '>=1.4', required : false)
+ftdi_dep = dependency('libftdi1', version : '>=1.3', required : false)
 if not ftdi_dep.found()
 	ftdi_dep = dependency('libftdi', version : '>=0.20')
 else
