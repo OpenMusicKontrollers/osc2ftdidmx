@@ -1119,10 +1119,11 @@ _run_test_hooks()
 }
 
 int
-main(int argc, char **argv)
+main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 {
-	(void)argc;
-	(void)argv;
+#if !defined(_WIN32)
+	(void)lv2_osc_stream_pollin; //FIXME
+#endif
 
 	fprintf(stdout, "running main tests:\n");
 	assert(_run_tests() == 0);
