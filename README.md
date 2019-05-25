@@ -33,16 +33,12 @@ Should be compatible with any FTDI-based USB-DMX adapter, e.g
 
 #### Discover your type of FTDI-DMX device via e.g. dmesg when plugging it in
 
-	[user@machine ~] dmesg | tail
-	[  132.613806] usb 1-1.4: new full-speed USB device number 5 using ehci-pci
+	[user@machine ~] dmesg
 	[  132.718684] usb 1-1.4: New USB device found, idVendor=0403, idProduct=6001, bcdDevice= 6.00
 	[  132.718689] usb 1-1.4: New USB device strings: Mfr=1, Product=2, SerialNumber=3
 	[  132.718691] usb 1-1.4: Product: KMtronic DMX Interface
 	[  132.718693] usb 1-1.4: Manufacturer: KMtronic
-	[  132.718695] usb 1-1.4: SerialNumber: AL3HZFUN
-	[  132.722047] ftdi_sio 1-1.4:1.0: FTDI USB Serial Device converter detected
-	[  132.722081] usb 1-1.4: Detected FT232RL
-	[  132.722808] usb 1-1.4: FTDI USB Serial Device converter now attached to ttyUSB0
+	[  132.718695] usb 1-1.4: SerialNumber: ABCXYZ
 
 #### Run osc2ftdidmx with the information gathered above
 
