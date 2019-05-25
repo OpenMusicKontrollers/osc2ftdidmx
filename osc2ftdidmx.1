@@ -5,10 +5,10 @@ osc2ftdidmx \- an OSC to FTDI-DMX bridge
 
 .SH SYNOPSIS
 .B osc2ftdidmx
-[\fIOPTIONS\fR] {\fURI\fR}*
+[\fIOPTIONS\fR]
 
 .SH DESCRIPTION
-\fBosc2ftdidmx\fP bridges OSC to an FTDI-based USB DMX adapter.
+\fBosc2ftdidmx\fP bridges Open Sound Control to an FTDI-based USB DMX adapter.
 
 .SH OPTIONS
 .HP
@@ -25,6 +25,36 @@ Print usage information
 \fB\-d\fR
 .IP
 Enable debug logging
+
+.HP
+\fB\-V\fR VID
+.IP
+USB vendor ID (0x0403)
+
+.HP
+\fB\-P\fR PID
+.IP
+USB product ID (0x6001)
+
+.HP
+\fB\-N\fR PID
+.IP
+USB product name (KMtronic DMX Interface)
+
+.HP
+\fB\-S\fR PID
+.IP
+USB serial ID ((null))
+
+.HP
+\fB\-F\fR PID
+.IP
+Frame rate (25)
+
+.HP
+\fB\-U\fR PID
+.IP
+OSC URI (osc.udp://:6666)
 
 .SH LICENSE
 Artistic License 2.0.
