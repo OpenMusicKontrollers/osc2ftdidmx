@@ -294,6 +294,50 @@ _ftdi_deinit(app_t *app)
 }
 
 static void
+_osc_deinit(app_t *app)
+{
+	lv2_osc_stream_deinit(&app->stream);
+
+	if(app->rb.rx)
+	{
+		varchunk_free(app->rb.rx);
+	}
+
+	if(app->rb.tx)
+	{
+		varchunk_free(app->rb.tx);
+	}
+}
+
+static int
+_osc_init(app_t *app)
+{
+	app->rb.rx = varchunk_new(8192, false);
+	if(!app->rb.rx)
+	{
+		goto failure;
+	}
+
+	app->rb.tx = varchunk_new(8192, false);
+	if(!app->rb.tx)
+	{
+		goto failure;
+	}
+
+	if(lv2_osc_stream_init(&app->stream, app->url, &driver, app) != 0)
+	{
+		fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
+		goto failure;
+	}
+
+	return 0;
+
+failure:
+	_osc_deinit(app);
+	return -1;
+}
+
+static void
 _version(void)
 {
 	fprintf(stderr,
@@ -424,33 +468,21 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 
 	if(sem_init(&sem, 0, 0) == -1)
 	{
-		goto failure;
+		return -1;
 	}
 
-	app.rb.rx = varchunk_new(8192, false);
-	if(!app.rb.rx)
+	if(_osc_init(&app) == -1)
 	{
 		sem_destroy(&sem);
-		goto failure;
-	}
-
-	app.rb.tx = varchunk_new(8192, false);
-	if(!app.rb.tx)
-	{
-		varchunk_free(app.rb.rx);
-		sem_destroy(&sem);
-		goto failure;
+		return -1;
 	}
 
 	if(_ftdi_init(&app) == -1)
 	{
-		varchunk_free(app.rb.tx);
-		varchunk_free(app.rb.rx);
+		_osc_deinit(&app);
 		sem_destroy(&sem);
-		goto failure;
+		return -1;
 	}
-
-	lv2_osc_stream_init(&app.stream, "osc.udp://:6666", &driver, &app);
 
 	struct timespec t0;
 	clock_gettime(CLOCK_REALTIME, &t0);
@@ -506,17 +538,9 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 		t0 = t1;
 	}
 
+	_ftdi_deinit(&app);
+	_osc_deinit(&app);
 	sem_destroy(&sem);
 
-	lv2_osc_stream_deinit(&app.stream);
-
-	_ftdi_deinit(&app);
-
-	varchunk_free(app.rb.rx);
-	varchunk_free(app.rb.tx);
-
 	return 0;
-
-failure:
-	return -1;
 }
