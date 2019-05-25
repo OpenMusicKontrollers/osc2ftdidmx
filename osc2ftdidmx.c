@@ -180,7 +180,7 @@ _handle_osc_packet(app_t *app, const uint8_t *buf, size_t len)
 	}
 }
 
-static int
+static void
 _ftdi_xmit(app_t *app)
 {
 	if(ftdi_set_line_property2(&app->ftdi, BITS_8, STOP_BIT_2, NONE,
@@ -201,12 +201,10 @@ _ftdi_xmit(app_t *app)
 		goto failure;
 	}
 
-	return 0;
+	return;
 
 failure:
 	fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
-
-	return -1;
 }
 
 static int
@@ -221,7 +219,7 @@ _ftdi_init(app_t *app)
 
 	if(ftdi_set_interface(&app->ftdi, INTERFACE_ANY) != 0)
 	{
-		goto failure;
+		goto failure_deinit;
 	}
 
 	if(app->nid && app->sid)
@@ -229,53 +227,58 @@ _ftdi_init(app_t *app)
 		if(ftdi_usb_open_desc(&app->ftdi, app->vid, app->pid,
 			app->nid, app->sid) != 0)
 		{
-			goto failure;
+			goto failure_deinit;
 		}
 	}
 	else
 	{
 		if(ftdi_usb_open(&app->ftdi, app->vid, app->pid) != 0)
 		{
-			goto failure;
+			goto failure_deinit;
 		}
 	}
 
 	if(ftdi_usb_reset(&app->ftdi) != 0)
 	{
-		goto failure;
+		goto failure_close;
 	}
 
 	if(ftdi_set_baudrate(&app->ftdi, 250000) != 0)
 	{
-		goto failure;
+		goto failure_close;
 	}
 
 	if(ftdi_set_line_property2(&app->ftdi, BITS_8, STOP_BIT_2, NONE,
 		BREAK_ON) != 0)
 	{
-		goto failure;
+		goto failure_close;
 	}
 
 	if(ftdi_usb_purge_buffers(&app->ftdi) != 0)
 	{
-		goto failure;
+		goto failure_close;
 	}
 
 	if(ftdi_setflowctrl(&app->ftdi, SIO_DISABLE_FLOW_CTRL) != 0)
 	{
-		goto failure;
+		goto failure_close;
 	}
 
 	if(ftdi_setrts(&app->ftdi, 0) != 0)
 	{
-		goto failure;
+		goto failure_close;
 	}
 
 	return 0;
 
+failure_close:
+	ftdi_usb_close(&app->ftdi);
+
+failure_deinit:
+	ftdi_deinit(&app->ftdi);
+
 failure:
 	fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
-
 	return -1;
 }
 
@@ -284,7 +287,7 @@ _ftdi_deinit(app_t *app)
 {
 	if(ftdi_usb_close(&app->ftdi) != 0)
 	{
-		//FIXME
+		fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
 	}
 
 	ftdi_deinit(&app->ftdi);
@@ -468,12 +471,6 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 
 		const LV2_OSC_Enum status = lv2_osc_stream_run(&app.stream);
 
-		if(status & LV2_OSC_SEND)
-		{
-			fprintf(stdout, "[%s:%i] sent\n", __func__, __LINE__);
-			//FIXME
-		}
-
 		if(status & LV2_OSC_RECV)
 		{
 			const uint8_t *buf;
@@ -486,15 +483,9 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 			}
 		}
 
-		if(status & LV2_OSC_CONN)
-		{
-			fprintf(stdout, "[%s:%i] connected\n", __func__, __LINE__);
-			//FIXME
-		}
-
 		if(status & LV2_OSC_ERR)
 		{
-			fprintf(stderr, "[%s:%i] %s\n", __func__, __LINE__, strerror(errno));
+			fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
 		}
 
 		t1.tv_nsec += step_poll;
@@ -510,10 +501,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 			continue;
 		}
 
-		if(_ftdi_xmit(&app) == -1)
-		{
-			//FIXME
-		}
+		_ftdi_xmit(&app);
 
 		t0 = t1;
 	}
