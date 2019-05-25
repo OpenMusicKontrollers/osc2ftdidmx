@@ -26,8 +26,8 @@ Should be compatible with any FTDI-based USB-DMX adapter, e.g
 
 * [ENTTEC OPEN DMX USB](https://www.enttec.co.uk/en/product/controls/dmx-usb-interfaces/open-dmx-usb/)
 * [KMtronic DMX Adapter](https://info.kmtronic.com/kmtronic-dmx-adapter.html)
-* [SOH Module USB - DMX 512] (http://eshop.soh.cz/en/light-control/i110-module-usb-dmx-512)
-* [KWMATIK USB dmx 512 ] (https://kwmatik.blogspot.com/2013/06/jak-podaczac-urzadzenia-dmx512-do-czego.html)
+* [SOH Module USB - DMX 512](http://eshop.soh.cz/en/light-control/i110-module-usb-dmx-512)
+* [KWMATIK USB dmx 512 ](https://kwmatik.blogspot.com/2013/06/jak-podaczac-urzadzenia-dmx512-do-czego.html)
 
 ### Usage
 
