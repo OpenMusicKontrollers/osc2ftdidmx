@@ -19,9 +19,9 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <inttypes.h>
-#include <semaphore.h>
 #include <time.h>
 #include <signal.h>
+#include <pthread.h>
 
 #ifdef HAVE_LIBFTDI1
 #	include <libftdi1/ftdi.h>
@@ -37,7 +37,7 @@
 #define FTDI_VID   0x0403
 #define FT232_PID  0x6001
 #define FT4232_PID 0x6011
-#define SEC        1000000000
+#define NSECS      1000000000
 
 typedef struct _app_t app_t;
 
@@ -50,6 +50,7 @@ struct _app_t {
 	const char *url;
 
 	LV2_OSC_Stream stream;
+	pthread_t thread;
 
 	struct ftdi_context ftdi;
 
@@ -64,14 +65,12 @@ struct _app_t {
 	} __attribute__((packed)) dmx;
 };
 
-static sem_t sem;
 static sig_atomic_t done = 0;
 
 static void
 _sig(int num __attribute__((unused)))
 {
 	done = 1;
-	sem_post(&sem);
 }
 
 static void *
@@ -312,13 +311,13 @@ _osc_deinit(app_t *app)
 static int
 _osc_init(app_t *app)
 {
-	app->rb.rx = varchunk_new(8192, false);
+	app->rb.rx = varchunk_new(8192, true);
 	if(!app->rb.rx)
 	{
 		goto failure;
 	}
 
-	app->rb.tx = varchunk_new(8192, false);
+	app->rb.tx = varchunk_new(8192, true);
 	if(!app->rb.tx)
 	{
 		goto failure;
@@ -335,6 +334,67 @@ _osc_init(app_t *app)
 failure:
 	_osc_deinit(app);
 	return -1;
+}
+
+static void *
+_beat(void *data)
+{
+	app_t *app = data;
+
+	const uint64_t step_ns = NSECS / app->fps;
+
+	struct timespec to;
+	clock_gettime(CLOCK_MONOTONIC, &to);
+
+	while(!done)
+	{
+		// sleep until next beat timestamp
+		if(clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &to, NULL) == -1)
+		{
+			continue;
+		}
+
+		// read OSC messages from ringbuffer
+		const uint8_t *buf;
+		size_t len;
+		while( (buf = varchunk_read_request(app->rb.rx, &len)) )
+		{
+			_handle_osc_packet(app, buf, len);
+
+			varchunk_read_advance(app->rb.rx);
+		}
+
+		// write DMX data
+		_ftdi_xmit(app);
+
+		// calculate next beat timestamp
+		to.tv_nsec += step_ns;
+		while(to.tv_nsec >= NSECS)
+		{
+			to.tv_sec += 1;
+			to.tv_nsec -= NSECS;
+		}
+	}
+
+	return NULL;
+}
+
+static int
+_thread_init(app_t *app)
+{
+	if(pthread_create(&app->thread, NULL, _beat, app) != 0)
+	{
+		fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
+		return -1;
+	}
+
+	return 0;
+}
+
+static void
+_thread_deinit(app_t *app)
+{
+	pthread_join(app->thread, NULL);
 }
 
 static void
@@ -466,81 +526,37 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	signal(SIGQUIT, _sig);
 	signal(SIGKILL, _sig);
 
-	if(sem_init(&sem, 0, 0) == -1)
-	{
-		return -1;
-	}
-
 	if(_osc_init(&app) == -1)
 	{
-		sem_destroy(&sem);
 		return -1;
 	}
 
 	if(_ftdi_init(&app) == -1)
 	{
 		_osc_deinit(&app);
-		sem_destroy(&sem);
 		return -1;
 	}
 
-	struct timespec t0;
-	clock_gettime(CLOCK_REALTIME, &t0);
-	struct timespec t1 = t0;
-
-	const uint64_t step_poll = SEC / 1000;
-	const uint64_t step_fps = SEC / app.fps;
+	if(_thread_init(&app) == -1)
+	{
+		_ftdi_deinit(&app);
+		_osc_deinit(&app);
+		return -1;
+	}
 
 	while(!done)
 	{
-		if(sem_timedwait(&sem, &t1) == -1)
-		{
-			if(errno != ETIMEDOUT)
-			{
-				continue;
-			}
-		}
-
-		const LV2_OSC_Enum status = lv2_osc_stream_run(&app.stream);
-
-		if(status & LV2_OSC_RECV)
-		{
-			const uint8_t *buf;
-			size_t len;
-			while( (buf = varchunk_read_request(app.rb.rx, &len)) )
-			{
-				_handle_osc_packet(&app, buf, len);
-
-				varchunk_read_advance(app.rb.rx);
-			}
-		}
+		const LV2_OSC_Enum status = lv2_osc_stream_pollin(&app.stream, -1);
 
 		if(status & LV2_OSC_ERR)
 		{
 			fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
 		}
-
-		t1.tv_nsec += step_poll;
-		while(t1.tv_nsec >= SEC)
-		{
-			t1.tv_sec += 1;
-			t1.tv_nsec -= SEC;
-		}
-
-		const uint64_t diff = (t1.tv_sec - t0.tv_sec)*SEC + t1.tv_nsec - t0.tv_nsec;
-		if(diff < step_fps)
-		{
-			continue;
-		}
-
-		_ftdi_xmit(&app);
-
-		t0 = t1;
 	}
 
+	_thread_deinit(&app);
 	_ftdi_deinit(&app);
 	_osc_deinit(&app);
-	sem_destroy(&sem);
 
 	return 0;
 }
