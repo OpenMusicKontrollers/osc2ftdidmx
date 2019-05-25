@@ -45,7 +45,7 @@ struct _app_t {
 	uint16_t vid;
 	uint16_t pid;
 	const char *sid;
-	const char *nid;
+	const char *des;
 	uint32_t fps;
 	const char *url;
 
@@ -222,10 +222,10 @@ _ftdi_init(app_t *app)
 		goto failure_deinit;
 	}
 
-	if(app->nid && app->sid)
+	if(app->des || app->sid)
 	{
 		if(ftdi_usb_open_desc(&app->ftdi, app->vid, app->pid,
-			app->nid, app->sid) != 0)
+			app->des, app->sid) != 0)
 		{
 			goto failure_deinit;
 		}
@@ -370,11 +370,11 @@ _usage(char **argv, app_t *app)
 		"   [-d]                     enable verbose logging\n"
 		"   [-V] VID                 USB vendor ID (0x%04"PRIx16")\n"
 		"   [-P] PID                 USB product ID (0x%04"PRIx16")\n"
-		"   [-N] NAME                USB product name (%s)\n"
-		"   [-S] SID                 USB serial ID (%s)\n"
+		"   [-D] DESCRIPTION         USB product name (%s)\n"
+		"   [-S] SERIAL              USB serial ID (%s)\n"
 		"   [-F] FPS                 Frame rate (%"PRIu32")\n"
 		"   [-U] URI                 OSC URI (%s)\n\n"
-		, argv[0], app->vid, app->pid, app->nid, app->sid, app->fps, app->url);
+		, argv[0], app->vid, app->pid, app->des, app->sid, app->fps, app->url);
 }
 
 int
@@ -384,7 +384,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 
 	app.vid = FTDI_VID;
 	app.pid = FT232_PID;
-	app.nid = "KMtronic DMX Interface";
+	app.des = NULL;
 	app.sid = NULL;
 	app.fps = 30;
 	app.url = "osc.udp://:6666";
@@ -396,7 +396,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 		argv[0]);
 
 	int c;
-	while( (c = getopt(argc, argv, "vhdV:P:N:S:F:U:") ) != -1)
+	while( (c = getopt(argc, argv, "vhdV:P:D:S:F:U:") ) != -1)
 	{
 		switch(c)
 		{
@@ -421,9 +421,9 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 			{
 				app.pid = strtol(optarg, NULL, 16);
 			} break;
-			case 'N':
+			case 'D':
 			{
-				app.nid = optarg;
+				app.des = optarg;
 			} break;
 			case 'S':
 			{
@@ -440,7 +440,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 
 			case '?':
 			{
-				if(  (optopt == 'V') || (optopt == 'P') || (optopt == 'N')
+				if(  (optopt == 'V') || (optopt == 'P') || (optopt == 'D')
 					|| (optopt == 'S') || (optopt == 'F') || (optopt == 'U') )
 				{
 					fprintf(stderr, "Option `-%c' requires an argument.\n", optopt);

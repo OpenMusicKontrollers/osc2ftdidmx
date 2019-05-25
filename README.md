@@ -49,7 +49,7 @@ Should be compatible with any FTDI-based USB-DMX adapter, e.g
 	osc2ftdidmx \
 		-V 0x0403 \                   # USB idVendor
 		-P 0x6001 \                   # USB idProduct
-		-N 'KMtronic DMX Interface' \ # USB product name
+		-D 'KMtronic DMX Interface' \ # USB product description
 		-S ABCXYZ \                   # USB product serial number
 		-F 30 \                       # update rate in frames per second
 		-U osc.udp://:6666            # OSC server URI
