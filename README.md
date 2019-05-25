@@ -22,7 +22,43 @@
 
 ### Usage
 
-	osc2ftdidmx -V 0x0403 -P 0x6001 -N 'KMtronic DMX Interface' -S ABCXYZ -F 30 -U osc.udp://:6666
+#### Discover your type of FTDI-DMX device via e.g. dmesg when plugging it in
+
+	[user@machine ~] dmesg | tail
+	[  132.613806] usb 1-1.4: new full-speed USB device number 5 using ehci-pci
+	[  132.718684] usb 1-1.4: New USB device found, idVendor=0403, idProduct=6001, bcdDevice= 6.00
+	[  132.718689] usb 1-1.4: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+	[  132.718691] usb 1-1.4: Product: KMtronic DMX Interface
+	[  132.718693] usb 1-1.4: Manufacturer: KMtronic
+	[  132.718695] usb 1-1.4: SerialNumber: AL3HZFUN
+	[  132.722047] ftdi_sio 1-1.4:1.0: FTDI USB Serial Device converter detected
+	[  132.722081] usb 1-1.4: Detected FT232RL
+	[  132.722808] usb 1-1.4: FTDI USB Serial Device converter now attached to ttyUSB0
+
+#### Run osc2ftdidmx with the information gathered above
+
+	osc2ftdidmx \
+		-V 0x0403 \                   # USB idVendor
+		-P 0x6001 \                   # USB idProduct
+		-N 'KMtronic DMX Interface' \ # USB product name
+		-S ABCXYZ \                   # USB product serial number
+		-F 30 \                       # update rate in frames per second
+		-U osc.udp://:6666            # OSC server URI
+
+#### Control osc2ftdidmx with your favorite OSC client
+
+Send your OSC messages to path **/dmx** with the first **i**nteger argument
+being the channel offset, and any following **i**nteger argument(s) being
+subsequent channel values.
+
+	# set channel 0 to value 255
+	oscsend osc.udp://localhost:6666 /dmx ii 0 255
+
+	# set channel 12 to value 127
+	oscsend osc.udp://localhost:6666 /dmx ii 12 127
+
+	# set channels 23,24,25,26 to values 1,2,3,4
+	oscsend osc.udp://localhost:6666 /dmx iiiii 23 1 2 3 4
 
 ### License
 

@@ -24,7 +24,7 @@ send_rgb()
 	local b=$(( (rgba >>  8) & 0xff ))
 	local a=$(( (rgba >>  9) & 0xff ))
 
-	oscsend osc.udp://localhost:6666 /dmx ii $channel $r $g $b $a
+	oscsend osc.udp://localhost:6666 /dmx iiiii $channel $r $g $b $a
 }
 
 ramp_up()

@@ -339,7 +339,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	app.pid = FT232_PID;
 	app.nid = "KMtronic DMX Interface";
 	app.sid = NULL;
-	app.fps = 25;
+	app.fps = 30;
 	app.url = "osc.udp://:6666";
 
 	fprintf(stderr,
