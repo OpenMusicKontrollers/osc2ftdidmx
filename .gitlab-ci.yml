@@ -41,17 +41,17 @@ stages:
 # building in docker
 x86_64-linux-gnu:
   before_script:
-    - apt-get install -y libftdi1-dev
+    - apt-get install -y libftdi1-dev libudev-dev
   <<: *universal_linux_definition
 
 i686-linux-gnu:
   before_script:
-    - apt-get install -y libftdi1-dev:i386
+    - apt-get install -y libftdi1-dev:i386 libudev-dev:i386
   <<: *universal_linux_definition
 
 arm-linux-gnueabihf:
   before_script:
-    - apt-get install -y libftdi1-dev:armhf
+    - apt-get install -y libftdi1-dev:armhf libudev-dev:armhf
   <<: *arm_linux_definition
 
 #x86_64-w64-mingw32:
