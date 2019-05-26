@@ -22,6 +22,7 @@
 #include <time.h>
 #include <signal.h>
 #include <pthread.h>
+#include <syslog.h>
 
 #ifdef HAVE_LIBFTDI1
 #	include <libftdi1/ftdi.h>
@@ -203,7 +204,7 @@ _ftdi_xmit(app_t *app)
 	return;
 
 failure:
-	fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
+	syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
 }
 
 static int
@@ -277,7 +278,7 @@ failure_deinit:
 	ftdi_deinit(&app->ftdi);
 
 failure:
-	fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
+	syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
 	return -1;
 }
 
@@ -286,7 +287,7 @@ _ftdi_deinit(app_t *app)
 {
 	if(ftdi_usb_close(&app->ftdi) != 0)
 	{
-		fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
+		syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
 	}
 
 	ftdi_deinit(&app->ftdi);
@@ -325,7 +326,7 @@ _osc_init(app_t *app)
 
 	if(lv2_osc_stream_init(&app->stream, app->url, &driver, app) != 0)
 	{
-		fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
+		syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
 		goto failure;
 	}
 
@@ -384,7 +385,7 @@ _thread_init(app_t *app)
 {
 	if(pthread_create(&app->thread, NULL, _beat, app) != 0)
 	{
-		fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
+		syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
 		return -1;
 	}
 
@@ -441,6 +442,7 @@ int
 main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 {
 	static app_t app;
+	int logp = LOG_INFO;
 
 	app.vid = FTDI_VID;
 	app.pid = FT232_PID;
@@ -470,7 +472,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 			}	return 0;
 			case 'd':
 			{
-				//FIXME
+				logp = LOG_DEBUG;
 			}	break;
 
 			case 'V':
@@ -526,6 +528,9 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	signal(SIGQUIT, _sig);
 	signal(SIGKILL, _sig);
 
+	openlog(NULL, LOG_PERROR, LOG_DAEMON);
+	setlogmask(LOG_UPTO(logp));
+
 	if(_osc_init(&app) == -1)
 	{
 		return -1;
@@ -550,7 +555,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 
 		if(status & LV2_OSC_ERR)
 		{
-			fprintf(stderr, "[%s] '%s'\n", __func__, strerror(errno));
+			syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
 		}
 	}
 
