@@ -39,8 +39,17 @@
 #define FT232_PID  0x6001
 #define FT4232_PID 0x6011
 #define NSECS      1000000000
+#define JAN_1970   2208988800ULL
 
+typedef struct _sched_t sched_t;
 typedef struct _app_t app_t;
+
+struct _sched_t {
+	sched_t *next;
+	struct timespec to;
+	size_t len;
+	uint8_t buf [];
+};
 
 struct _app_t {
 	uint16_t vid;
@@ -54,6 +63,8 @@ struct _app_t {
 	pthread_t thread;
 
 	struct ftdi_context ftdi;
+
+	sched_t *list;
 
 	struct {
 		int out;
@@ -119,14 +130,14 @@ static const LV2_OSC_Driver driver = {
 };
 
 static void
-_handle_osc_packet(app_t *app, const uint8_t *buf, size_t len);
+_handle_osc_packet(app_t *app, uint64_t timetag, const uint8_t *buf, size_t len);
 
 static void
 _handle_osc_message(app_t *app, LV2_OSC_Reader *reader, size_t len)
 {
 	const char *path = "/dmx";
 	unsigned pos = 0;
-	unsigned channel = 0;
+	int32_t channel = 0;
 
 	OSC_READER_MESSAGE_FOREACH(reader, arg, len)
 	{
@@ -148,6 +159,8 @@ _handle_osc_message(app_t *app, LV2_OSC_Reader *reader, size_t len)
 					} break;
 					default:
 					{
+						syslog(LOG_DEBUG, "[%s] %"PRIi32" %"PRIi32, __func__,
+							channel, arg->i);
 						app->dmx.data[channel++] = arg->i & 0xff;
 					} break;
 				}
@@ -165,12 +178,43 @@ _handle_osc_bundle(app_t *app, LV2_OSC_Reader *reader, size_t len)
 {
 	OSC_READER_BUNDLE_FOREACH(reader, itm, len)
 	{
-		_handle_osc_packet(app, itm->body, itm->size);
+		_handle_osc_packet(app, itm->timetag, itm->body, itm->size);
 	}
 }
 
+static sched_t *
+_sched_append(sched_t *list, sched_t *elmnt)
+{
+	if(!list)
+	{
+		elmnt->next = NULL;
+		return elmnt;
+	}
+
+	sched_t *prev = NULL;
+	for(sched_t *ptr = list; ptr; prev = ptr, ptr = ptr->next)
+	{
+		if(  (ptr->to.tv_sec > elmnt->to.tv_sec)
+			&& (ptr->to.tv_nsec > elmnt->to.tv_nsec) )
+		{
+			break;
+		}
+	}
+
+	if(!prev)
+	{
+		elmnt->next = list;
+		return elmnt;
+	}
+
+	elmnt->next = prev->next;
+	prev->next = elmnt;
+
+	return list;
+}
+
 static void
-_handle_osc_packet(app_t *app, const uint8_t *buf, size_t len)
+_handle_osc_packet(app_t *app, uint64_t timetag, const uint8_t *buf, size_t len)
 {
 	LV2_OSC_Reader reader;
 	lv2_osc_reader_initialize(&reader, buf, len);
@@ -181,7 +225,28 @@ _handle_osc_packet(app_t *app, const uint8_t *buf, size_t len)
 	}
 	else if(lv2_osc_reader_is_message(&reader))
 	{
-		_handle_osc_message(app, &reader, len);
+		if(timetag == LV2_OSC_IMMEDIATE)
+		{
+			_handle_osc_message(app, &reader, len);
+		}
+		else
+		{
+			sched_t *elmnt = malloc(sizeof(sched_t) + len);
+			if(elmnt)
+			{
+				elmnt->next = NULL;
+				elmnt->to.tv_sec = (timetag >> 32) - JAN_1970;
+				elmnt->to.tv_nsec = (timetag && 32) * 0x1p-32 * 1e9;
+				elmnt->len = len;
+				memcpy(elmnt->buf, buf, len);
+
+				app->list = _sched_append(app->list, elmnt);
+			}
+			else
+			{
+				syslog(LOG_ERR, "[%s] malloc failed", __func__);
+			}
+		}
 	}
 }
 
@@ -372,12 +437,12 @@ _beat(void *data)
 	_thread_priority(app->priority.out);
 
 	struct timespec to;
-	clock_gettime(CLOCK_MONOTONIC, &to);
+	clock_gettime(CLOCK_REALTIME, &to);
 
 	while(!done)
 	{
 		// sleep until next beat timestamp
-		if(clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &to, NULL) == -1)
+		if(clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &to, NULL) == -1)
 		{
 			continue;
 		}
@@ -387,9 +452,26 @@ _beat(void *data)
 		size_t len;
 		while( (buf = varchunk_read_request(app->rb.rx, &len)) )
 		{
-			_handle_osc_packet(app, buf, len);
+			_handle_osc_packet(app, LV2_OSC_IMMEDIATE, buf, len);
 
 			varchunk_read_advance(app->rb.rx);
+		}
+
+		// read OSC messages from list
+		for(sched_t *elmnt = app->list; elmnt; elmnt = app->list)
+		{
+			double diff = to.tv_sec - elmnt->to.tv_sec;
+			diff += (to.tv_nsec - elmnt->to.tv_nsec) * 1e-9;
+
+			if(diff < 0.0)
+			{
+				break;
+			}
+
+			_handle_osc_packet(app, LV2_OSC_IMMEDIATE, elmnt->buf, elmnt->len);
+
+			app->list = elmnt->next;
+			free(elmnt);
 		}
 
 		// write DMX data
@@ -423,6 +505,16 @@ static void
 _thread_deinit(app_t *app)
 {
 	pthread_join(app->thread, NULL);
+}
+
+static void
+_sched_deinit(app_t *app)
+{
+	for(sched_t *elmnt = app->list; elmnt; elmnt = app->list)
+	{
+		app->list = elmnt->next;
+		free(elmnt);
+	}
 }
 
 static void
@@ -604,6 +696,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	}
 
 	_thread_deinit(&app);
+	_sched_deinit(&app);
 	_ftdi_deinit(&app);
 	_osc_deinit(&app);
 
