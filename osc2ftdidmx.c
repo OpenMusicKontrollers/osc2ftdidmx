@@ -37,9 +37,10 @@
 
 #define FTDI_VID   0x0403
 #define FT232_PID  0x6001
-#define FT4232_PID 0x6011
 #define NSECS      1000000000
 #define JAN_1970   2208988800ULL
+
+//#define FTDI_SKIP
 
 typedef struct _sched_t sched_t;
 typedef struct _slot_t slot_t;
@@ -158,8 +159,8 @@ _osc_dmx(app_t *app, LV2_OSC_Reader *reader, LV2_OSC_Arg *arg)
 					} break;
 					default:
 					{
-						syslog(LOG_DEBUG, "[%s] %"PRIi32" %"PRIi32, __func__,
-							channel, arg->i);
+						syslog(LOG_DEBUG, "[%s] prio: %"PRIi32" chan: %"PRIi32" val: %"PRIi32,
+							__func__, priority, channel, arg->i);
 
 						slot_t *slot = &app->slots[channel++];
 						slot->mask |= (1 << priority);
@@ -200,8 +201,8 @@ _osc_dmx_push(app_t *app, LV2_OSC_Reader *reader, LV2_OSC_Arg *arg)
 					} break;
 					default:
 					{
-						syslog(LOG_DEBUG, "[%s] %"PRIi32" %"PRIi32, __func__,
-							channel, arg->i);
+						syslog(LOG_DEBUG, "[%s] prio: %"PRIi32" chan: %"PRIi32" val: %"PRIi32,
+							__func__, priority, channel, arg->i);
 
 						slot_t *slot = &app->slots[channel++];
 						slot->mask |= (1 << priority);
@@ -222,7 +223,6 @@ _osc_dmx_pop(app_t *app, LV2_OSC_Reader *reader, LV2_OSC_Arg *arg)
 {
 	unsigned pos = 0;
 	int32_t priority = 0;
-	int32_t channel = 0;
 
 	OSC_READER_MESSAGE_ITERATE(reader, arg)
 	{
@@ -236,20 +236,42 @@ _osc_dmx_pop(app_t *app, LV2_OSC_Reader *reader, LV2_OSC_Arg *arg)
 					{
 						priority = arg->i & 0x1f;
 					} break;
-					case 1:
-					{
-						channel = arg->i & 0x1ff;
-					} break;
 					default:
 					{
-						syslog(LOG_DEBUG, "[%s] %"PRIi32" %"PRIi32, __func__,
-							channel, arg->i);
+						const int32_t channel = arg->i & 0x1ff;
 
-						slot_t *slot = &app->slots[channel++];
+						syslog(LOG_DEBUG, "[%s] prio: %"PRIi32" chan: %"PRIi32, __func__,
+							priority, channel);
+
+						slot_t *slot = &app->slots[channel];
 						slot->mask &= ~(1 << priority);
 						slot->data[priority] = arg->i & 0xff;
 					} break;
 				}
+			} break;
+			default:
+			{
+				// ignore other types
+			} break;
+		}
+	}
+}
+
+static void
+_osc_dmx_clear(app_t *app, LV2_OSC_Reader *reader, LV2_OSC_Arg *arg)
+{
+	OSC_READER_MESSAGE_ITERATE(reader, arg)
+	{
+		switch(arg->type[0])
+		{
+			case LV2_OSC_INT32:
+			{
+				const int32_t channel = arg->i & 0x1ff;
+
+				syslog(LOG_DEBUG, "[%s] chan: %"PRIi32, __func__, channel);
+
+				slot_t *slot = &app->slots[channel];
+				slot->mask = 0x0;
 			} break;
 			default:
 			{
@@ -278,6 +300,10 @@ _handle_osc_message(app_t *app, LV2_OSC_Reader *reader, size_t len)
 	else if(!strcmp(arg->path, "/dmx/pop"))
 	{
 		_osc_dmx_pop(app, reader, arg);
+	}
+	else if(!strcmp(arg->path, "/dmx/clear"))
+	{
+		_osc_dmx_clear(app, reader, arg);
 	}
 }
 
@@ -361,6 +387,7 @@ _handle_osc_packet(app_t *app, uint64_t timetag, const uint8_t *buf, size_t len)
 static void
 _ftdi_xmit(app_t *app)
 {
+#if !defined(FTDI_SKIP)
 	if(ftdi_set_line_property2(&app->ftdi, BITS_8, STOP_BIT_2, NONE,
 		BREAK_ON) != 0)
 	{
@@ -378,16 +405,22 @@ _ftdi_xmit(app_t *app)
 	{
 		goto failure;
 	}
+#else
+	(void)app;
+#endif
 
 	return;
 
+#if !defined(FTDI_SKIP)
 failure:
-	syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
+	syslog(LOG_ERR, "[%s] '%s'", __func__, strerror(errno));
+#endif
 }
 
 static int
 _ftdi_init(app_t *app)
 {
+#if !defined(FTDI_SKIP)
 	app->ftdi.module_detach_mode = AUTO_DETACH_SIO_MODULE;
 
 	if(ftdi_init(&app->ftdi) != 0)
@@ -446,9 +479,13 @@ _ftdi_init(app_t *app)
 	{
 		goto failure_close;
 	}
+#else
+	(void)app;
+#endif
 
 	return 0;
 
+#if !defined(FTDI_SKIP)
 failure_close:
 	ftdi_usb_close(&app->ftdi);
 
@@ -456,19 +493,24 @@ failure_deinit:
 	ftdi_deinit(&app->ftdi);
 
 failure:
-	syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
+	syslog(LOG_ERR, "[%s] '%s'", __func__, strerror(errno));
 	return -1;
+#endif
 }
 
 static void
 _ftdi_deinit(app_t *app)
 {
+#if !defined(FTDI_SKIP)
 	if(ftdi_usb_close(&app->ftdi) != 0)
 	{
-		syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
+		syslog(LOG_ERR, "[%s] '%s'", __func__, strerror(errno));
 	}
 
 	ftdi_deinit(&app->ftdi);
+#else
+	(void)app;
+#endif
 }
 
 static void
@@ -504,7 +546,7 @@ _osc_init(app_t *app)
 
 	if(lv2_osc_stream_init(&app->stream, app->url, &driver, app) != 0)
 	{
-		syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
+		syslog(LOG_ERR, "[%s] '%s'", __func__, strerror(errno));
 		goto failure;
 	}
 
@@ -531,7 +573,7 @@ _thread_priority(int priority)
 
 		if(pthread_setschedparam(self, SCHED_FIFO, &schedp) != 0)
 		{
-			syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
+			syslog(LOG_ERR, "[%s] '%s'", __func__, strerror(errno));
 		}
 }
 
@@ -583,7 +625,7 @@ _beat(void *data)
 		}
 
 		// fill dmx buffer
-		for(unsigned i = 0; i < 512; i++)
+		for(uint32_t i = 0; i < 512; i++)
 		{
 			slot_t *slot = &app->slots[i];
 
@@ -593,11 +635,12 @@ _beat(void *data)
 				continue;
 			}
 
+			// find highest priority value
 			for(uint32_t j = 0, mask = 0x80000000; j < 32; j++, mask >>= 1)
 			{
 				if(slot->mask & mask)
 				{
-					app->dmx.data[i] = slot->data[j];
+					app->dmx.data[i] = slot->data[32-1-j];
 					break;
 				}
 			}
@@ -623,7 +666,7 @@ _thread_init(app_t *app)
 {
 	if(pthread_create(&app->thread, NULL, _beat, app) != 0)
 	{
-		syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
+		syslog(LOG_ERR, "[%s] '%s'", __func__, strerror(errno));
 		return -1;
 	}
 
@@ -820,7 +863,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 
 		if(status & LV2_OSC_ERR)
 		{
-			syslog(LOG_ERR, "[%s] '%s'\n", __func__, strerror(errno));
+			syslog(LOG_ERR, "[%s] '%s'", __func__, strerror(errno));
 		}
 	}
 

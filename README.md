@@ -52,9 +52,17 @@ Should be compatible with any FTDI-based USB-DMX adapter, e.g
 
 #### Control osc2ftdidmx with your favorite OSC client
 
-Send your OSC messages to path **/dmx** with the first **i**nteger argument
-being the channel offset, and any following **i**nteger argument(s) being
-subsequent channel values.
+##### **/dmx**
+
+* **i** channel offset (0-511)
+* **i** value at channel offset +0 (0-255)
+* **i** value at channel offset +1 (0-255)
+* ...
+* **i** value at channel offset +n (0-255)
+
+For simple channel setting, send your OSC messages to path **/dmx** with the
+first **i**nteger argument being the channel offset, and any following
+**i**nteger argument(s) being subsequent channel values.
 
 	# set channel 0 to value 255
 	oscsend osc.udp://localhost:6666 /dmx ii 0 255
@@ -64,6 +72,46 @@ subsequent channel values.
 
 	# set channels 23,24,25,26 to values 1,2,3,4
 	oscsend osc.udp://localhost:6666 /dmx iiiii 23 1 2 3 4
+
+##### **/dmx/push**
+
+Each channel has 32 associated priority values. Path **/dmx** pushes a value
+to lowest priority channel=0. If you have higher priority values that should
+precedence, you can push them onto the stack of values via path **/dmx/push**
+with the first **i**nteger argument being the priority, second **i**nteger
+argument being channel offset, and any following **i**nteger argument(s)
+being subsequent channel values.
+
+* **i** priority (0-31)
+* **i** channel offset (0-511)
+* **i** value at channel offset +0 (0-255)
+* **i** value at channel offset +1 (0-255)
+* ...
+* **i** value at channel offset +n (0-255)
+
+##### **/dmx/pop**
+
+To remove a previously pushed priority value(s) via **/dmx/push** or **/dmx**,
+you can remove values from the priorit stack via **/dmx/pop** with first
+**i**nteger argument being the priority, and any subsequent integer argument(s)
+being channel numbers.
+
+* **i** priority (0-31)
+* **i** channel number (0-511)
+* **i** channel number (0-511)
+* ...
+* **i** channel number (0-511)
+
+##### **/dmx/clear**
+
+To remove all previously pushed priority value(s) via **/dmx/push** or **/dmx**,
+you can remove all of from from the priorit stack via **/dmx/clear** with
+subsequent **i**nteger argument(s) being channel numbers.
+
+* **i** channel number (0-511)
+* **i** channel number (0-511)
+* ...
+* **i** channel number (0-511)
 
 ### License
 
