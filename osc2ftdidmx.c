@@ -42,6 +42,7 @@
 #define JAN_1970   2208988800ULL
 
 typedef struct _sched_t sched_t;
+typedef struct _slot_t slot_t;
 typedef struct _app_t app_t;
 
 struct _sched_t {
@@ -49,6 +50,11 @@ struct _sched_t {
 	struct timespec to;
 	size_t len;
 	uint8_t buf [];
+};
+
+struct _slot_t {
+	uint32_t mask;
+	uint8_t data [32];
 };
 
 struct _app_t {
@@ -75,6 +81,8 @@ struct _app_t {
 		varchunk_t *rx;
 		varchunk_t *tx;
 	} rb;
+
+	slot_t slots [512];
 
 	struct {
 		uint8_t start_code [1];
@@ -130,23 +138,14 @@ static const LV2_OSC_Driver driver = {
 };
 
 static void
-_handle_osc_packet(app_t *app, uint64_t timetag, const uint8_t *buf, size_t len);
-
-static void
-_handle_osc_message(app_t *app, LV2_OSC_Reader *reader, size_t len)
+_osc_dmx(app_t *app, LV2_OSC_Reader *reader, LV2_OSC_Arg *arg)
 {
-	const char *path = "/dmx";
 	unsigned pos = 0;
+	const int32_t priority = 0;
 	int32_t channel = 0;
 
-	OSC_READER_MESSAGE_FOREACH(reader, arg, len)
+	OSC_READER_MESSAGE_ITERATE(reader, arg)
 	{
-		if(path && strcmp(arg->path, path))
-		{
-			return;
-		}
-		path = NULL;
-
 		switch(arg->type[0])
 		{
 			case LV2_OSC_INT32:
@@ -161,7 +160,10 @@ _handle_osc_message(app_t *app, LV2_OSC_Reader *reader, size_t len)
 					{
 						syslog(LOG_DEBUG, "[%s] %"PRIi32" %"PRIi32, __func__,
 							channel, arg->i);
-						app->dmx.data[channel++] = arg->i & 0xff;
+
+						slot_t *slot = &app->slots[channel++];
+						slot->mask |= (1 << priority);
+						slot->data[priority] = arg->i & 0xff;
 					} break;
 				}
 			} break;
@@ -170,6 +172,112 @@ _handle_osc_message(app_t *app, LV2_OSC_Reader *reader, size_t len)
 				// ignore other types
 			} break;
 		}
+	}
+}
+
+static void
+_osc_dmx_push(app_t *app, LV2_OSC_Reader *reader, LV2_OSC_Arg *arg)
+{
+	unsigned pos = 0;
+	int32_t priority = 0;
+	int32_t channel = 0;
+
+	OSC_READER_MESSAGE_ITERATE(reader, arg)
+	{
+		switch(arg->type[0])
+		{
+			case LV2_OSC_INT32:
+			{
+				switch(pos++)
+				{
+					case 0:
+					{
+						priority = arg->i & 0x1f;
+					} break;
+					case 1:
+					{
+						channel = arg->i & 0x1ff;
+					} break;
+					default:
+					{
+						syslog(LOG_DEBUG, "[%s] %"PRIi32" %"PRIi32, __func__,
+							channel, arg->i);
+
+						slot_t *slot = &app->slots[channel++];
+						slot->mask |= (1 << priority);
+						slot->data[priority] = arg->i & 0xff;
+					} break;
+				}
+			} break;
+			default:
+			{
+				// ignore other types
+			} break;
+		}
+	}
+}
+
+static void
+_osc_dmx_pop(app_t *app, LV2_OSC_Reader *reader, LV2_OSC_Arg *arg)
+{
+	unsigned pos = 0;
+	int32_t priority = 0;
+	int32_t channel = 0;
+
+	OSC_READER_MESSAGE_ITERATE(reader, arg)
+	{
+		switch(arg->type[0])
+		{
+			case LV2_OSC_INT32:
+			{
+				switch(pos++)
+				{
+					case 0:
+					{
+						priority = arg->i & 0x1f;
+					} break;
+					case 1:
+					{
+						channel = arg->i & 0x1ff;
+					} break;
+					default:
+					{
+						syslog(LOG_DEBUG, "[%s] %"PRIi32" %"PRIi32, __func__,
+							channel, arg->i);
+
+						slot_t *slot = &app->slots[channel++];
+						slot->mask &= ~(1 << priority);
+						slot->data[priority] = arg->i & 0xff;
+					} break;
+				}
+			} break;
+			default:
+			{
+				// ignore other types
+			} break;
+		}
+	}
+}
+
+static void
+_handle_osc_packet(app_t *app, uint64_t timetag, const uint8_t *buf, size_t len);
+
+static void
+_handle_osc_message(app_t *app, LV2_OSC_Reader *reader, size_t len)
+{
+	LV2_OSC_Arg *arg = OSC_READER_MESSAGE_BEGIN(reader, len);
+
+	if(!strcmp(arg->path, "/dmx"))
+	{
+		_osc_dmx(app, reader, arg);
+	}
+	else if(!strcmp(arg->path, "/dmx/push"))
+	{
+		_osc_dmx_push(app, reader, arg);
+	}
+	else if(!strcmp(arg->path, "/dmx/pop"))
+	{
+		_osc_dmx_pop(app, reader, arg);
 	}
 }
 
@@ -472,6 +580,27 @@ _beat(void *data)
 
 			app->list = elmnt->next;
 			free(elmnt);
+		}
+
+		// fill dmx buffer
+		for(unsigned i = 0; i < 512; i++)
+		{
+			slot_t *slot = &app->slots[i];
+
+			if(slot->mask == 0x0)
+			{
+				app->dmx.data[i] = 0x0;
+				continue;
+			}
+
+			for(uint32_t j = 0, mask = 0x80000000; j < 32; j++, mask >>= 1)
+			{
+				if(slot->mask & mask)
+				{
+					app->dmx.data[i] = slot->data[j];
+					break;
+				}
+			}
 		}
 
 		// write DMX data
