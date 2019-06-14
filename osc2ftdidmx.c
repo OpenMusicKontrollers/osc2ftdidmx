@@ -158,7 +158,6 @@ _priority (LV2_OSC_Reader *reader __attribute__((unused)),
 
 	if(app->cur_arg && !lv2_osc_reader_arg_is_end(&app->cur_reader, app->cur_arg))
 	{
-		fprintf(stderr, "%s\n", app->cur_arg->type);
 		switch(app->cur_arg->type[0])
 		{
 			case LV2_OSC_INT32:
