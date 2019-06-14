@@ -23,6 +23,9 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#if !defined(_WIN32)
+# include <fnmatch.h>
+#endif
 
 #include <osc.lv2/osc.h>
 
@@ -70,18 +73,77 @@ static const char valid_format_chars [] = {
 };
 
 static bool
-_lv2_osc_pattern_match(const char *from, const char *name, size_t len)
+lv2_osc_pattern_match(const char *from, const char *name, size_t len)
 {
-	const char *ast = strpbrk(from, "/*");
-	if(ast && (*ast == '*') )
-	{
-		len = ast - from;
-	}
-	//FIXME handle '?[]{}'
+#if !defined(_WIN32)
+	size_t nbrace = 0;
 
-	return strncmp(from, name, len) == 0
-		? true
-		: false;
+#	if defined(FNM_EXTMATCH)
+	// count opening curly braces
+	for(size_t i = 0; i < len; i++)
+	{
+		if(from[i] == '{')
+		{
+			nbrace++;
+		}
+	}
+#	endif
+
+	// allocate temporary pattern buffer
+	char *pattern = alloca(len + nbrace + 1);
+
+	if(!pattern)
+	{
+		return false;
+	}
+
+#	if defined(FNM_EXTMATCH)
+	// convert {x,y} to @(x|y) for extended fnmatch
+	if(nbrace)
+	{
+		char *ptr = pattern;
+
+		for(size_t i = 0; i < len; i++)
+		{
+			switch(from[i])
+			{
+				case '{':
+				{
+					*ptr++ = '@';
+					*ptr++ = '(';
+				} break;
+				case ',':
+				{
+					*ptr++ = '|';
+				} break;
+				case '}':
+				{
+					*ptr++ = ')';
+				} break;
+				default:
+				{
+					*ptr++ = from[i];
+				} break;
+			}
+		}
+	}
+	else
+#	endif
+	{
+		memcpy(pattern, from, len);
+	}
+
+	// terminate pattern string with null terminator
+	pattern[len + nbrace] = '\0';
+
+#	if defined(FNM_EXTMATCH)
+	return fnmatch(pattern, name, FNM_NOESCAPE | FNM_EXTMATCH) == 0 ? true : false;
+#	else
+	return fnmatch(pattern, name, FNM_NOESCAPE) == 0 ? true : false;
+#	endif
+#else
+	return strncmp(from, name, len) == 0 ? true : false;
+#endif
 }
 
 static void
@@ -96,7 +158,7 @@ _lv2_osc_hooks_internal(const char *path, const char *from,
 
 	for(const LV2_OSC_Hook *hook = hooks; hook && hook->name; hook++)
 	{
-		if(_lv2_osc_pattern_match(from, hook->name, len))
+		if(lv2_osc_pattern_match(from, hook->name, len))
 		{
 			if(hook->hooks && ptr)
 			{
