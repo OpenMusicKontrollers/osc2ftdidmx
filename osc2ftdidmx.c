@@ -40,7 +40,7 @@
 #define NSECS      1000000000
 #define JAN_1970   2208988800ULL
 
-#define FTDI_SKIP
+//#define FTDI_SKIP
 
 typedef struct _sched_t sched_t;
 typedef struct _slot_t slot_t;

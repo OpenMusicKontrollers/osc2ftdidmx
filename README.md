@@ -52,66 +52,54 @@ Should be compatible with any FTDI-based USB-DMX adapter, e.g
 
 #### Control osc2ftdidmx with your favorite OSC client
 
-##### **/dmx**
+osc2ftdidmx supports 32 priority levels per channel. If priority level 0 on a
+given channel is set, and now priority level 1 gets set, the latter takes
+precedence. When priority level 1 is cleared, value is taken from priority
+level 0 again. If no priority level is set on a given channel, the channel's
+value is assumed to be 0.
 
-* **i** channel offset (0-511)
-* **i** value at channel offset +0 (0-255)
-* **i** value at channel offset +1 (0-255)
-* ...
-* **i** value at channel offset +n (0-255)
+##### **/dmx/[0-511]/[0-31] {i}+ [0-255]+**
 
-For simple channel setting, send your OSC messages to path **/dmx** with the
-first **i**nteger argument being the channel offset, and any following
-**i**nteger argument(s) being subsequent channel values.
+To set channels, send your OSC messages to given OSC path with
+**i**nteger argument(s) being subsequent channel/priority values.
 
-	# set channel 0 to value 255
-	oscsend osc.udp://localhost:6666 /dmx ii 0 255
+	# set channel 0, priority 0 to value 255
+	oscsend osc.udp://localhost:6666 /dmx/0/0 i 255
 
-	# set channel 12 to value 127
-	oscsend osc.udp://localhost:6666 /dmx ii 12 127
+	# set channel 12, priority 31 to value 127
+	oscsend osc.udp://localhost:6666 /dmx/12/31 i 127
 
-	# set channels 23,24,25,26 to values 1,2,3,4
-	oscsend osc.udp://localhost:6666 /dmx iiiii 23 1 2 3 4
+	# set channels 23,24,25,26, priority 1 to values 1,2,3,4
+	oscsend osc.udp://localhost:6666 /dmx/{23,24,25,26}/1 iiii 1 2 3 4
 
-##### **/dmx/push**
+	# set all channels, priority 3 to value 0
+	oscsend osc.udp://localhost:6666 /dmx/*/3 i 0
 
-Each channel has 32 associated priority values. Path **/dmx** pushes a value
-to lowest priority channel=0. If you have higher priority values that should
-precedence, you can push them onto the stack of values via path **/dmx/push**
-with the first **i**nteger argument being the priority, second **i**nteger
-argument being channel offset, and any following **i**nteger argument(s)
-being subsequent channel values.
+	# set channel 0, priorities 0,1 to values 1, 2
+	# set channel 1, priorities 0,1 to values 3, 4
+	oscsend osc.udp://localhost:6666 /dmx/[0-1]/[0-1] iiii 1 2 3 4
 
-* **i** priority (0-31)
-* **i** channel offset (0-511)
-* **i** value at channel offset +0 (0-255)
-* **i** value at channel offset +1 (0-255)
-* ...
-* **i** value at channel offset +n (0-255)
+	# set channel 0, priorities 0,1 to values 1, 2
+	# set channel 1, priorities 0,1 to values 3, 3
+	oscsend osc.udp://localhost:6666 /dmx/[0-1]/[0-1] iii 1 2 3
 
-##### **/dmx/pop**
+	# set channel 0, priorities 0,1 to values 1, 2
+	# set channel 1, priorities 0,1 to values 2, 2
+	oscsend osc.udp://localhost:6666 /dmx/[0-1]/[0-1] ii 1 2
 
-To remove a previously pushed priority value(s) via **/dmx/push** or **/dmx**,
-you can remove values from the priorit stack via **/dmx/pop** with first
-**i**nteger argument being the priority, and any subsequent integer argument(s)
-being channel numbers.
+	# set channel 0, priorities 0,1 to values 1, 1
+	# set channel 1, priorities 0,1 to values 1, 1
+	oscsend osc.udp://localhost:6666 /dmx/[0-1]/[0-1] i 1
 
-* **i** priority (0-31)
-* **i** channel number (0-511)
-* **i** channel number (0-511)
-* ...
-* **i** channel number (0-511)
+##### **/dmx/[0-511]/[0-31]
 
-##### **/dmx/clear**
+To clear values, send your oSC messages to given OSC path without any arguments.
 
-To remove all previously pushed priority value(s) via **/dmx/push** or **/dmx**,
-you can remove all of from from the priorit stack via **/dmx/clear** with
-subsequent **i**nteger argument(s) being channel numbers.
+	# clear all channels, priorities
+	oscsend osc.udp://localhost:6666 /dmx/*/*
 
-* **i** channel number (0-511)
-* **i** channel number (0-511)
-* ...
-* **i** channel number (0-511)
+	# clear channel 0-1, priorities 0-1
+	oscsend osc.udp://localhost:6666 /dmx/[0-1]/[0-1]
 
 ### License
 
