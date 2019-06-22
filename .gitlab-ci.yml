@@ -30,10 +30,6 @@ stages:
   image: ventosus/arm-linux-gnueabihf
   <<: *build_definition
 
-.aarch64_linux_template: &aarch64_linux_definition
-  image: ventosus/arm-linux-gnueabihf
-  <<: *build_definition
-
 .universal_w64_template: &universal_w64_definition
   image: ventosus/universal-w64-mingw32
   <<: *build_definition
@@ -61,7 +57,7 @@ arm-linux-gnueabihf:
 aarch64-linux-gnu:
   before_script:
     - apt-get install -y libftdi1-dev:arm64 libudev-dev:arm64
-  <<: *aarch64_linux_definition
+  <<: *arm_linux_definition
 
 #x86_64-w64-mingw32:
 #  <<: *universal_w64_definition
