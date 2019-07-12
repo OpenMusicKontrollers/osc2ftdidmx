@@ -1,10 +1,43 @@
-# osc2ftdidmx
+## osc2ftdidmx
 
-## OSC to FTDI DMX bridge
+### OSC to FTDI DMX bridge
 
-### Build status
+Control your DMX devices via an OSC server that talks to FTDI-DMX USB adapters..
+
+#### Build status
 
 [![build status](https://gitlab.com/OpenMusicKontrollers/osc2ftdidmx/badges/master/build.svg)](https://gitlab.com/OpenMusicKontrollers/osc2ftdidmx/commits/master)
+
+### Binaries
+
+For GNU/Linux (64-bit, 32-bit, armv7, aarch64).
+
+To install the plugin bundle on your system, simply copy the __osc2ftdidmx__
+folder out of the platform folder of the downloaded package into your
+[LV2 path](http://lv2plug.in/pages/filesystem-hierarchy-standard.html).
+
+#### Stable release
+
+* [osc2ftdidmx-0.2.0.zip](https://dl.open-music-kontrollers.ch/osc2ftdidmx/stable/osc2ftdidmx-0.2.0.zip) ([sig](https://dl.open-music-kontrollers.ch/osc2ftdidmx/stable/osc2ftdidmx-0.2.0.zip.sig))
+
+#### Unstable (nightly) release
+
+* [osc2ftdidmx-latest-unstable.zip](https://dl.open-music-kontrollers.ch/osc2ftdidmx/unstable/osc2ftdidmx-latest-unstable.zip) ([sig](https://dl.open-music-kontrollers.ch/osc2ftdidmx/unstable/osc2ftdidmx-latest-unstable.zip.sig))
+
+### Sources
+
+#### Stable release
+
+* [osc2ftdidmx-0.2.0.tar.xz](https://git.open-music-kontrollers.ch/lad/osc2ftdidmx/snapshot/osc2ftdidmx-0.2.0.tar.xz)
+
+#### Git repository
+
+* <https://git.open-music-kontrollers.ch/lad/osc2ftdidmx>
+
+### Bugs and feature requests
+
+* [Gitlab](https://gitlab.com/OpenMusicKontrollers/osc2ftdidmx)
+* [Github](https://github.com/OpenMusicKontrollers/osc2ftdidmx)
 
 ### Dependencies
 
@@ -93,7 +126,7 @@ To set channels, send your OSC messages to given OSC path with
 
 ##### **/dmx/[0-511]/[0-31]
 
-To clear values, send your oSC messages to given OSC path without any arguments.
+To clear values, send your OSC messages to given OSC path without any arguments.
 
 	# clear all channels, priorities
 	oscsend osc.udp://localhost:6666 /dmx/*/*
