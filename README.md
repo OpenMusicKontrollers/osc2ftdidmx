@@ -12,10 +12,6 @@ Control your DMX devices via an OSC server that talks to FTDI-DMX USB adapters..
 
 For GNU/Linux (64-bit, 32-bit, armv7, aarch64).
 
-To install the plugin bundle on your system, simply copy the __osc2ftdidmx__
-folder out of the platform folder of the downloaded package into your
-[LV2 path](http://lv2plug.in/pages/filesystem-hierarchy-standard.html).
-
 #### Stable release
 
 * [osc2ftdidmx-0.2.0.zip](https://dl.open-music-kontrollers.ch/osc2ftdidmx/stable/osc2ftdidmx-0.2.0.zip) ([sig](https://dl.open-music-kontrollers.ch/osc2ftdidmx/stable/osc2ftdidmx-0.2.0.zip.sig))
@@ -124,7 +120,7 @@ To set channels, send your OSC messages to given OSC path with
 	# set channel 1, priorities 0,1 to values 1, 1
 	oscsend osc.udp://localhost:6666 /dmx/[0-1]/[0-1] i 1
 
-##### **/dmx/[0-511]/[0-31]
+##### **/dmx/[0-511]/[0-31]**
 
 To clear values, send your OSC messages to given OSC path without any arguments.
 
