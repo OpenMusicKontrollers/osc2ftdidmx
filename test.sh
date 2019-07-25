@@ -1,9 +1,10 @@
 #!/bin/bash
 
-red=0
-blue=1
-green=2
-alpha=3
+offset=4
+red=$(( offset + 0 ))
+blue=$(( offset + 1 ))
+green=$(( offset + 2))
+alpha=$(( offset + 3 ))
 
 inc=8
 dec=-8
@@ -11,7 +12,7 @@ slp=0.05
 
 send()
 {
-	oscsend osc.udp://localhost:6666 /dmx ii $1 $2
+	oscsend osc.udp://192.168.1.201:6666 /dmx ii $1 $2
 }
 
 send_rgb()
@@ -60,6 +61,7 @@ on
 ramp_up $red
 
 while true; do
+	send $alpha 190
 	ramp_up $green
 	ramp_down $red
 	ramp_up $blue

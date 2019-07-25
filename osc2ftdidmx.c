@@ -856,7 +856,7 @@ _handle_osc_packet(app_t *app, uint64_t timetag, const uint8_t *buf, size_t len)
 	}
 }
 
-static void
+static int
 _ftdi_xmit(app_t *app)
 {
 #if !defined(FTDI_SKIP)
@@ -881,11 +881,12 @@ _ftdi_xmit(app_t *app)
 	(void)app;
 #endif
 
-	return;
+	return 0;
 
 #if !defined(FTDI_SKIP)
 failure:
 	syslog(LOG_ERR, "[%s] '%s'", __func__, strerror(errno));
+	return 1;
 #endif
 }
 
@@ -1053,6 +1054,7 @@ static void *
 _beat(void *data)
 {
 	app_t *app = data;
+	static int again = 0;
 
 	const uint64_t step_ns = NSECS / app->fps;
 
@@ -1119,7 +1121,18 @@ _beat(void *data)
 		}
 
 		// write DMX data
-		_ftdi_xmit(app);
+		if(_ftdi_xmit(app) != 0)
+		{
+			switch(errno)
+			{
+				//FIXME handle some errors specially ?
+				default:
+				{
+					again = 1; // auto-reinitialize
+					done = 1; // end xmit loops
+				} break;
+			}
+		}
 
 		// calculate next beat timestamp
 		to.tv_nsec += step_ns;
@@ -1130,7 +1143,7 @@ _beat(void *data)
 		}
 	}
 
-	return NULL;
+	return &again;
 }
 
 static int
@@ -1145,10 +1158,19 @@ _thread_init(app_t *app)
 	return 0;
 }
 
-static void
+static int
 _thread_deinit(app_t *app)
 {
-	pthread_join(app->thread, NULL);
+	int *again = NULL;
+
+	pthread_join(app->thread, (void **)&again);
+
+	if(again)
+	{
+		return *again;
+	}
+
+	return 0;
 }
 
 static void
@@ -1309,40 +1331,45 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	openlog(NULL, LOG_PERROR, LOG_DAEMON);
 	setlogmask(LOG_UPTO(logp));
 
-	if(_osc_init(&app) == -1)
-	{
-		return -1;
-	}
+	int again = 1;
 
-	if(_ftdi_init(&app) == -1)
+	while(again)
 	{
-		_osc_deinit(&app);
-		return -1;
-	}
+		if(_osc_init(&app) == -1)
+		{
+			return -1;
+		}
 
-	if(_thread_init(&app) == -1)
-	{
+		if(_ftdi_init(&app) == -1)
+		{
+			_osc_deinit(&app);
+			return -1;
+		}
+
+		if(_thread_init(&app) == -1)
+		{
+			_ftdi_deinit(&app);
+			_osc_deinit(&app);
+			return -1;
+		}
+
+		_thread_priority(app.priority.inp);
+
+		while(!done)
+		{
+			const LV2_OSC_Enum status = lv2_osc_stream_pollin(&app.stream, -1);
+
+			if(status & LV2_OSC_ERR)
+			{
+				syslog(LOG_ERR, "[%s] '%s'", __func__, strerror(errno));
+			}
+		}
+
+		again = _thread_deinit(&app);
+		_sched_deinit(&app);
 		_ftdi_deinit(&app);
 		_osc_deinit(&app);
-		return -1;
 	}
-
-	_thread_priority(app.priority.inp);
-
-	while(!done)
-	{
-		const LV2_OSC_Enum status = lv2_osc_stream_pollin(&app.stream, -1);
-
-		if(status & LV2_OSC_ERR)
-		{
-			syslog(LOG_ERR, "[%s] '%s'", __func__, strerror(errno));
-		}
-	}
-
-	_thread_deinit(&app);
-	_sched_deinit(&app);
-	_ftdi_deinit(&app);
-	_osc_deinit(&app);
 
 	return 0;
 }
