@@ -23,6 +23,7 @@
 #include <signal.h>
 #include <pthread.h>
 #include <syslog.h>
+#include <stdatomic.h>
 
 #ifdef HAVE_LIBFTDI1
 #	include <libftdi1/ftdi.h>
@@ -98,12 +99,12 @@ struct _app_t {
 	} __attribute__((packed)) dmx;
 };
 
-static sig_atomic_t done = 0;
+static atomic_bool done = ATOMIC_VAR_INIT(false);
 
 static void
 _sig(int num __attribute__((unused)))
 {
-	done = 1;
+	atomic_store(&done, true);
 }
 
 static void *
@@ -1063,7 +1064,7 @@ _beat(void *data)
 	struct timespec to;
 	clock_gettime(CLOCK_REALTIME, &to);
 
-	while(!done)
+	while(!atomic_load(&done))
 	{
 		// sleep until next beat timestamp
 		if(clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &to, NULL) == -1)
@@ -1123,15 +1124,8 @@ _beat(void *data)
 		// write DMX data
 		if(_ftdi_xmit(app) != 0)
 		{
-			switch(errno)
-			{
-				//FIXME handle some errors specially ?
-				default:
-				{
-					again = 1; // auto-reinitialize
-					done = 1; // end xmit loops
-				} break;
-			}
+			again = 1; // auto-reinitialize
+			atomic_store(&done, true); // end xmit loops
 		}
 
 		// calculate next beat timestamp
@@ -1158,7 +1152,7 @@ _thread_init(app_t *app)
 	return 0;
 }
 
-static int
+static bool
 _thread_deinit(app_t *app)
 {
 	int *again = NULL;
@@ -1167,10 +1161,10 @@ _thread_deinit(app_t *app)
 
 	if(again)
 	{
-		return *again;
+		return *again ? true : false;
 	}
 
-	return 0;
+	return false;
 }
 
 static void
@@ -1331,7 +1325,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	openlog(NULL, LOG_PERROR, LOG_DAEMON);
 	setlogmask(LOG_UPTO(logp));
 
-	int again = 1;
+	bool again = true;
 
 	while(again)
 	{
@@ -1355,9 +1349,9 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 
 		_thread_priority(app.priority.inp);
 
-		while(!done)
+		while(!atomic_load(&done))
 		{
-			const LV2_OSC_Enum status = lv2_osc_stream_pollin(&app.stream, -1);
+			const LV2_OSC_Enum status = lv2_osc_stream_pollin(&app.stream, 1000);
 
 			if(status & LV2_OSC_ERR)
 			{
