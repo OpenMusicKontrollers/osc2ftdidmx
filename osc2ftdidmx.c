@@ -99,11 +99,13 @@ struct _app_t {
 	} __attribute__((packed)) dmx;
 };
 
+static atomic_bool reconnect = ATOMIC_VAR_INIT(false);
 static atomic_bool done = ATOMIC_VAR_INIT(false);
 
 static void
 _sig(int num __attribute__((unused)))
 {
+	atomic_store(&reconnect, false);
 	atomic_store(&done, true);
 }
 
@@ -894,6 +896,7 @@ failure:
 static int
 _ftdi_init(app_t *app)
 {
+	return -1;
 #if !defined(FTDI_SKIP)
 	app->ftdi.module_detach_mode = AUTO_DETACH_SIO_MODULE;
 
@@ -1055,7 +1058,6 @@ static void *
 _beat(void *data)
 {
 	app_t *app = data;
-	static int again = 0;
 
 	const uint64_t step_ns = NSECS / app->fps;
 
@@ -1124,8 +1126,7 @@ _beat(void *data)
 		// write DMX data
 		if(_ftdi_xmit(app) != 0)
 		{
-			again = 1; // auto-reinitialize
-			atomic_store(&done, true); // end xmit loops
+			atomic_store(&done, true); // end xmit loop
 		}
 
 		// calculate next beat timestamp
@@ -1137,7 +1138,7 @@ _beat(void *data)
 		}
 	}
 
-	return &again;
+	return NULL;
 }
 
 static int
@@ -1152,19 +1153,10 @@ _thread_init(app_t *app)
 	return 0;
 }
 
-static bool
+static void
 _thread_deinit(app_t *app)
 {
-	int *again = NULL;
-
-	pthread_join(app->thread, (void **)&again);
-
-	if(again)
-	{
-		return *again ? true : false;
-	}
-
-	return false;
+	pthread_join(app->thread, NULL);
 }
 
 static void
@@ -1175,6 +1167,49 @@ _sched_deinit(app_t *app)
 		app->list = elmnt->next;
 		free(elmnt);
 	}
+}
+
+static int
+_loop(app_t *app)
+{
+	if(_osc_init(app) == -1)
+	{
+		return -1;
+	}
+
+	if(_ftdi_init(app) == -1)
+	{
+		_osc_deinit(app);
+		return -1;
+	}
+
+	if(_thread_init(app) == -1)
+	{
+		_ftdi_deinit(app);
+		_osc_deinit(app);
+		return -1;
+	}
+
+	atomic_store(&done, false);
+
+	_thread_priority(app->priority.inp);
+
+	while(!atomic_load(&done))
+	{
+		const LV2_OSC_Enum status = lv2_osc_stream_pollin(&app->stream, 1000);
+
+		if(status & LV2_OSC_ERR)
+		{
+			syslog(LOG_ERR, "[%s] '%s'", __func__, strerror(errno));
+		}
+	}
+
+	_thread_deinit(app);
+	_sched_deinit(app);
+	_ftdi_deinit(app);
+	_osc_deinit(app);
+
+	return 0;
 }
 
 static void
@@ -1208,6 +1243,7 @@ _usage(char **argv, app_t *app)
 		"   [-v]                     print version information\n"
 		"   [-h]                     print usage information\n"
 		"   [-d]                     enable verbose logging\n"
+		"   [-A]                     enable auto-reconnect (disabled)\n"
 		"   [-V] VID                 USB vendor ID (0x%04"PRIx16")\n"
 		"   [-P] PID                 USB product ID (0x%04"PRIx16")\n"
 		"   [-D] DESCRIPTION         USB product name (%s)\n"
@@ -1243,7 +1279,7 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 		argv[0]);
 
 	int c;
-	while( (c = getopt(argc, argv, "vhdV:P:D:S:F:U:I:O:") ) != -1)
+	while( (c = getopt(argc, argv, "vhdAV:P:D:S:F:U:I:O:") ) != -1)
 	{
 		switch(c)
 		{
@@ -1259,6 +1295,11 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 			{
 				logp = LOG_DEBUG;
 			}	break;
+			case 'A':
+			{
+				atomic_store(&reconnect, true);
+			}	break;
+
 
 			case 'V':
 			{
@@ -1325,45 +1366,12 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	openlog(NULL, LOG_PERROR, LOG_DAEMON);
 	setlogmask(LOG_UPTO(logp));
 
-	bool again = true;
-
-	while(again)
+	int ret;
+	while( (ret = _loop(&app)) && atomic_load(&reconnect) )
 	{
-		if(_osc_init(&app) == -1)
-		{
-			return -1;
-		}
-
-		if(_ftdi_init(&app) == -1)
-		{
-			_osc_deinit(&app);
-			return -1;
-		}
-
-		if(_thread_init(&app) == -1)
-		{
-			_ftdi_deinit(&app);
-			_osc_deinit(&app);
-			return -1;
-		}
-
-		_thread_priority(app.priority.inp);
-
-		while(!atomic_load(&done))
-		{
-			const LV2_OSC_Enum status = lv2_osc_stream_pollin(&app.stream, 1000);
-
-			if(status & LV2_OSC_ERR)
-			{
-				syslog(LOG_ERR, "[%s] '%s'", __func__, strerror(errno));
-			}
-		}
-
-		again = _thread_deinit(&app);
-		_sched_deinit(&app);
-		_ftdi_deinit(&app);
-		_osc_deinit(&app);
+		syslog(LOG_NOTICE, "[%s] preparing to reconnect", __func__);
+		sleep(1);
 	}
 
-	return 0;
+	return ret;
 }
