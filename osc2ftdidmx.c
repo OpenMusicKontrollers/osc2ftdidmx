@@ -896,7 +896,6 @@ failure:
 static int
 _ftdi_init(app_t *app)
 {
-	return -1;
 #if !defined(FTDI_SKIP)
 	app->ftdi.module_detach_mode = AUTO_DETACH_SIO_MODULE;
 
