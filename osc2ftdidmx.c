@@ -1365,11 +1365,14 @@ main(int argc __attribute__((unused)), char **argv __attribute__((unused)))
 	openlog(NULL, LOG_PERROR, LOG_DAEMON);
 	setlogmask(LOG_UPTO(logp));
 
-	int ret;
-	while( (ret = _loop(&app)) && atomic_load(&reconnect) )
+	int ret = _loop(&app);
+
+	while(atomic_load(&reconnect))
 	{
 		syslog(LOG_NOTICE, "[%s] preparing to reconnect", __func__);
 		sleep(1);
+
+		ret = _loop(&app);
 	}
 
 	return ret;
