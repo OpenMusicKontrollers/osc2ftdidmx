@@ -28,10 +28,8 @@ endif
 
 deps = [thread_dep, lv2_dep, ftdi_dep]
 
-srcs = ['osc2ftdidmx.c']
-
 executable('osc2ftdidmx',
-	srcs,
+	[ 'main.c', 'osc2ftdidmx.c' ],
 	include_directories : incs,
 	dependencies : deps,
 	install : true)
@@ -44,7 +42,8 @@ configure_file(
 install_man(join_paths(meson.current_build_dir(), 'osc2ftdidmx.1'))
 
 test_osc2ftdidmx = executable('test_osc2ftdidmx',
-	'test.c',
+	[ 'test.c', 'osc2ftdidmx.c' ],
+	include_directories : incs,
 	dependencies : deps,
 	install : false)
 

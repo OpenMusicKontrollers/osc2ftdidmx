@@ -20,55 +20,44 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <syslog.h>
+
+#include <osc.lv2/reader.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct _slot_t slot_t;
+typedef struct _state_t state_t;
 
 struct _slot_t {
 	uint32_t mask;
 	uint8_t data [32];
 };
 
-static inline void
-_set_prio(slot_t *slot, uint8_t prio, uint8_t val)
-{
-		slot->mask |= (1 << prio);
-		slot->data[prio] = val;
-}
+struct _state_t {
+	uint16_t cur_channel;
+	uint8_t cur_value;
+	bool cur_set;
+	LV2_OSC_Reader cur_reader;
+	LV2_OSC_Arg *cur_arg;
+	slot_t slots [512];
+};
 
-static inline void
-_clr_prio(slot_t *slot, uint8_t prio)
-{
-		slot->mask &= ~(1 << prio);
-}
+void
+slot_set_val(slot_t *slot, uint8_t prio, uint8_t val);
 
-static inline bool
-_has_prio(slot_t *slot)
-{
-	return (slot->mask != 0x0);
-}
+void
+slot_clr_val(slot_t *slot, uint8_t prio);
 
-static inline uint8_t
-_get_prio(slot_t *slot)
-{
-	if(_has_prio(slot))
-	{
-		for(uint32_t j = 0, mask = 0x80000000; j < 32; j++, mask >>= 1)
-		{
-			if(slot->mask & mask)
-			{
-				const uint8_t prio = 32 - 1 - j;
+bool
+slot_has_val(slot_t *slot);
 
-				return slot->data[prio];
-			}
-		}
-	}
+uint8_t
+slot_get_val(slot_t *slot);
 
-	return 0x0;
-}
+extern const LV2_OSC_Tree tree_root [];
 
 #ifdef __cplusplus
 }
