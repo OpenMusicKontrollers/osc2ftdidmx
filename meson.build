@@ -42,3 +42,10 @@ configure_file(
 	copy : true)
 
 install_man(join_paths(meson.current_build_dir(), 'osc2ftdidmx.1'))
+
+test_osc2ftdidmx = executable('test_osc2ftdidmx',
+	'test.c',
+	dependencies : deps,
+	install : false)
+
+test('Test', test_osc2ftdidmx)

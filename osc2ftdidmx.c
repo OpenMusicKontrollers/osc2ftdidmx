@@ -35,6 +35,7 @@
 #include <osc.lv2/reader.h>
 
 #include <varchunk.h>
+#include <osc2ftdidmx.h>
 
 #define FTDI_VID   0x0403
 #define FT232_PID  0x6001
@@ -44,7 +45,6 @@
 //#define FTDI_SKIP
 
 typedef struct _sched_t sched_t;
-typedef struct _slot_t slot_t;
 typedef struct _app_t app_t;
 
 struct _sched_t {
@@ -52,11 +52,6 @@ struct _sched_t {
 	struct timespec to;
 	size_t len;
 	uint8_t buf [];
-};
-
-struct _slot_t {
-	uint32_t mask;
-	uint8_t data [32];
 };
 
 struct _app_t {
@@ -178,18 +173,17 @@ _priority (LV2_OSC_Reader *reader __attribute__((unused)),
 	}
 
 	slot_t *slot = &app->slots[app->cur_channel];
-	slot->data[app->cur_priority] = app->cur_value;
 
 	if(app->cur_set)
 	{
-		slot->mask |= (1 << app->cur_priority);
+		_set_prio(slot, app->cur_priority, app->cur_value);
 
 		syslog(LOG_DEBUG, "[%s] SET chan: %"PRIu16" prio: %"PRIu8" val: %"PRIu8,
 			__func__, app->cur_channel, app->cur_priority, app->cur_value);
 	}
 	else
 	{
-		slot->mask &= ~(1 << app->cur_priority);
+		_clr_prio(slot, app->cur_priority);
 
 		syslog(LOG_DEBUG, "[%s] CLEAR chan: %"PRIu16" prio: %"PRIu8,
 			__func__, app->cur_channel, app->cur_priority);
@@ -1105,21 +1099,7 @@ _beat(void *data)
 		{
 			slot_t *slot = &app->slots[i];
 
-			if(slot->mask == 0x0)
-			{
-				app->dmx.data[i] = 0x0;
-				continue;
-			}
-
-			// find highest priority value
-			for(uint32_t j = 0, mask = 0x80000000; j < 32; j++, mask >>= 1)
-			{
-				if(slot->mask & mask)
-				{
-					app->dmx.data[i] = slot->data[32-1-j];
-					break;
-				}
-			}
+			app->dmx.data[i] = _get_prio(slot);
 		}
 
 		// write DMX data
