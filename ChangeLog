@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0] - 13 Oct 2019
+
+### Added
+
+* auto-reinitialization of FTDI device upon transmit failure
+* various unit tests
+
 ## [0.2.0] - 15 Jul 2019
 
 ### Initial release
