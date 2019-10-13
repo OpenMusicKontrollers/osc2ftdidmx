@@ -14,7 +14,7 @@ For GNU/Linux (64-bit, 32-bit, armv7, aarch64).
 
 #### Stable release
 
-* [osc2ftdidmx-0.2.0.zip](https://dl.open-music-kontrollers.ch/osc2ftdidmx/stable/osc2ftdidmx-0.2.0.zip) ([sig](https://dl.open-music-kontrollers.ch/osc2ftdidmx/stable/osc2ftdidmx-0.2.0.zip.sig))
+* [osc2ftdidmx-0.4.0.zip](https://dl.open-music-kontrollers.ch/osc2ftdidmx/stable/osc2ftdidmx-0.4.0.zip) ([sig](https://dl.open-music-kontrollers.ch/osc2ftdidmx/stable/osc2ftdidmx-0.4.0.zip.sig))
 
 #### Unstable (nightly) release
 
@@ -24,7 +24,7 @@ For GNU/Linux (64-bit, 32-bit, armv7, aarch64).
 
 #### Stable release
 
-* [osc2ftdidmx-0.2.0.tar.xz](https://git.open-music-kontrollers.ch/lad/osc2ftdidmx/snapshot/osc2ftdidmx-0.2.0.tar.xz)
+* [osc2ftdidmx-0.4.0.tar.xz](https://git.open-music-kontrollers.ch/lad/osc2ftdidmx/snapshot/osc2ftdidmx-0.4.0.tar.xz)
 
 #### Git repository
 
