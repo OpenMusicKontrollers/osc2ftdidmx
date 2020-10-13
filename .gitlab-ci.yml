@@ -4,59 +4,59 @@ include:
 x86_64-linux-gnu-stretch:
   before_script:
     - apt-get update
-    - apt-get install -y -q libftdi1-dev
+    - apt-get install -y -q libftdi1-dev libudev-dev
 
 x86_64-linux-gnu-buster:
   before_script:
     - apt-get update
-    - apt-get install -y -q libftdi1-dev
+    - apt-get install -y -q libftdi1-dev libudev-dev
 
 x86_64-linux-gnu-bullseye:
   before_script:
     - apt-get update
-    - apt-get install -y -q libftdi1-dev
+    - apt-get install -y -q libftdi1-dev libudev-dev
 
 i686-linux-gnu-stretch:
   before_script:
     - apt-get update
-    - apt-get install -y -q libftdi1-dev:i386
+    - apt-get install -y -q libftdi1-dev:i386 libudev-dev:i386
 
 i686-linux-gnu-buster:
   before_script:
     - apt-get update
-    - apt-get install -y -q libftdi1-dev:i386
+    - apt-get install -y -q libftdi1-dev:i386 libudev-dev:i386
 
 i686-linux-gnu-bullseye:
   before_script:
     - apt-get update
-    - apt-get install -y -q libftdi1-dev:i386
+    - apt-get install -y -q libftdi1-dev:i386 libudev-dev:i386
 
 arm-linux-gnueabihf-stretch:
   before_script:
     - apt-get update
-    - apt-get install -y -q libftdi1-dev:armhf
+    - apt-get install -y -q libftdi1-dev:armhf libudev-dev:armhf
 
 arm-linux-gnueabihf-buster:
   before_script:
     - apt-get update
-    - apt-get install -y -q libftdi1-dev:armhf
+    - apt-get install -y -q libftdi1-dev:armhf libudev-dev:armhf
 
 arm-linux-gnueabihf-bullseye:
   before_script:
     - apt-get update
-    - apt-get install -y -q libftdi1-dev:armhf
+    - apt-get install -y -q libftdi1-dev:armhf libudev-dev:armhf
 
 aarch64-linux-gnu-stretch:
   before_script:
     - apt-get update
-    - apt-get install -y -q libftdi1-dev:aarch64
+    - apt-get install -y -q libftdi1-dev:arm64 libudev-dev:arm64
 
 aarch64-linux-gnu-buster:
   before_script:
     - apt-get update
-    - apt-get install -y -q libftdi1-dev:aarch64
+    - apt-get install -y -q libftdi1-dev:arm64 libudev-dev:arm64
 
 aarch64-linux-gnu-bullseye:
   before_script:
     - apt-get update
-    - apt-get install -y -q libftdi1-dev:aarch64
+    - apt-get install -y -q libftdi1-dev:arm64 libudev-dev:arm64
