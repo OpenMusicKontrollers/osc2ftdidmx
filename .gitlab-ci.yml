@@ -1,2 +1,62 @@
 include:
   - local: 'gitlab-ci/generic.yml'
+
+x86_64-linux-gnu-stretch:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libftdi1-dev
+
+x86_64-linux-gnu-buster:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libftdi1-dev
+
+x86_64-linux-gnu-bullseye:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libftdi1-dev
+
+i686-linux-gnu-stretch:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libftdi1-dev:i386
+
+i686-linux-gnu-buster:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libftdi1-dev:i386
+
+i686-linux-gnu-bullseye:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libftdi1-dev:i386
+
+arm-linux-gnueabihf-stretch:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libftdi1-dev:armhf
+
+arm-linux-gnueabihf-buster:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libftdi1-dev:armhf
+
+arm-linux-gnueabihf-bullseye:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libftdi1-dev:armhf
+
+aarch64-linux-gnu-stretch:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libftdi1-dev:aarch64
+
+aarch64-linux-gnu-buster:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libftdi1-dev:aarch64
+
+aarch64-linux-gnu-bullseye:
+  before_script:
+    - apt-get update
+    - apt-get install -y -q libftdi1-dev:aarch64
